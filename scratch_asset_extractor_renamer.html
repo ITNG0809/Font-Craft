@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scratch 素材名復元ツール (.sb3 / .sprite3)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .drag-active { border-color: #4F46E5 !important; background-color: #EEF2FF !important; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 flex flex-col">
+
+    <header class="bg-indigo-600 text-white shadow-md">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-file-zipper text-2xl"></i>
+                <h1 class="text-xl font-bold tracking-wide">Scratch 素材ファイル名復元ツール</h1>
+            </div>
+            <span class="text-xs bg-indigo-500 text-indigo-100 px-3 py-1 rounded-full border border-indigo-400">.sb3 / .sprite3 対応</span>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 py-8 flex-grow w-full">
+        <div class="bg-white rounded-2xl shadow-xl p-6 md:p-8 border border-slate-100 mb-8">
+            <p class="text-slate-600 mb-6 text-sm md:text-base">
+                Scratchの作品ファイル（<code class="bg-slate-100 px-2 py-0.5 rounded text-indigo-600 font-mono">.sb3</code>）やスプライトファイル（<code class="bg-slate-100 px-2 py-0.5 rounded text-indigo-600 font-mono">.sprite3</code>）をアップロードすると、ハッシュ化（暗号化）された画像や音声ファイルを元のコスチューム名・音の名前に変換してZIPで一括保存できます。
+            </p>
+
+            <!-- Drop Zone -->
+            <div id="dropZone" class="border-3 border-dashed border-slate-300 rounded-xl p-8 text-center bg-slate-50 hover:bg-slate-100 transition duration-200 cursor-pointer flex flex-col items-center justify-center min-h-[200px]">
+                <input type="file" id="fileInput" accept=".sb3,.sprite3,.zip" class="hidden">
+                <div class="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mb-4 text-2xl">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                </div>
+                <p class="text-lg font-semibold text-slate-700 mb-1">ここに Scratch ファイルをドラッグ＆ドロップ</p>
+                <p class="text-xs text-slate-400 mb-4">または「ファイルを選択」ボタンをクリックしてください (.sb3, .sprite3)</p>
+                <button type="button" onclick="document.getElementById('fileInput').click()" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg shadow-sm transition">
+                    ファイルを選択
+                </button>
+            </div>
+        </div>
+
+        <div id="statusSection" class="hidden mb-8">
+            <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-4 flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div id="spinner" class="animate-spin text-indigo-600 text-xl">
+                        <i class="fa-solid fa-circle-notch"></i>
+                    </div>
+                    <div>
+                        <h4 id="statusTitle" class="text-sm font-semibold text-indigo-900">ファイルを解析中...</h4>
+                        <p id="statusDesc" class="text-xs text-indigo-700">JSON構造の展開とMD5ハッシュの照合を行なっています</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="resultSection" class="hidden space-y-6">
+            <!-- Controls Bar -->
+            <div class="bg-white p-4 rounded-xl shadow-md border border-slate-100 flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center space-x-2">
+                    <span id="assetCountBadge" class="bg-indigo-100 text-indigo-800 font-bold px-3 py-1 rounded-full text-xs">
+                        0 個のアセット検出
+                    </span>
+                    <span id="fileNameDisplay" class="text-sm font-medium text-slate-500 truncate max-w-xs">
+                        filename.sprite3
+                    </span>
+                </div>
+                <div class="flex space-x-3">
+                    <button id="downloadZipBtn" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg shadow-md transition flex items-center space-x-2 text-sm">
+                        <i class="fa-solid fa-file-arrow-down"></i>
+                        <span>復元名で一括ZIPダウンロード</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Asset List View -->
+            <div class="bg-white rounded-xl shadow-md border border-slate-100 overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                    <h3 class="font-bold text-slate-700 text-sm tracking-wide uppercase">検出されたファイル一覧</h3>
+                    <span class="text-xs text-slate-400">プレビュー / マッピング情報</span>
+                </div>
+                <div class="divide-y divide-slate-100 max-h-[500px] overflow-y-auto" id="assetList">
+                    <!-- Dynamic Rows Insertion -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-slate-100 border-t border-slate-200 text-center py-4 text-xs text-slate-500">
+        Scratch is a trademark of the Scratch Team, which does not sponsor, authorize or endorse this tool.
+    </footer>
+
+    <script>
+        // App State
+        let currentZip = null;
+        let processedAssets = []; // { hashName, originalName, blob, spriteName, type }
+        let currentFileName = '';
+
+        // UI Elements
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const statusSection = document.getElementById('statusSection');
+        const resultSection = document.getElementById('resultSection');
+        const assetList = document.getElementById('assetList');
+        const statusTitle = document.getElementById('statusTitle');
+        const statusDesc = document.getElementById('statusDesc');
+        const downloadZipBtn = document.getElementById('downloadZipBtn');
+        const assetCountBadge = document.getElementById('assetCountBadge');
+        const fileNameDisplay = document.getElementById('fileNameDisplay');
+
+        // Drag & Drop handlers
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                dropZone.classList.add('drag-active');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('drag-active');
+            }, false);
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if (files.length) handleFile(files[0]);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length) handleFile(e.target.files[0]);
+        });
+
+        async function handleFile(file) {
+            currentFileName = file.name;
+            showStatus('ファイルを読み込み中...', 'アーカイブデータを解析しています');
+            resultSection.classList.add('hidden');
+            processedAssets = [];
+
+            try {
+                const zip = new JSZip();
+                const contents = await zip.loadAsync(file);
+                currentZip = contents;
+
+                // Look for project.json or sprite.json
+                let jsonFile = contents.file('project.json') || contents.file('sprite.json');
+
+                if (!jsonFile) {
+                    throw new Error('有効な project.json または sprite.json が見つかりませんでした。');
+                }
+
+                showStatus('構成情報を解析中...', 'コスチュームと音データのマップを作成しています');
+                const jsonText = await jsonFile.async('string');
+                const scratchData = JSON.parse(jsonText);
+
+                // Parse assets mapping
+                const assetMap = parseScratchJson(scratchData);
+
+                // Collect file blobs
+                showStatus('アセットを復元中...', '元のファイル名への紐付けを行なっています');
+                for (const [hashName, info] of Object.entries(assetMap)) {
+                    const zipEntry = contents.file(hashName);
+                    if (zipEntry) {
+                        const blob = await zipEntry.async('blob');
+                        processedAssets.push({
+                            hashName: hashName,
+                            originalName: info.originalName,
+                            spriteName: info.spriteName,
+                            type: info.type,
+                            blob: blob
+                        });
+                    }
+                }
+
+                renderAssetList();
+                hideStatus();
+                resultSection.classList.remove('hidden');
+
+            } catch (err) {
+                alert('エラーが発生しました: ' + err.message);
+                hideStatus();
+            }
+        }
+
+        function parseScratchJson(json) {
+            const assetMap = {}; // hashFilename -> { originalName, spriteName, type }
+
+            // Check if single sprite object or full project
+            const targets = json.targets ? json.targets : [json];
+
+            targets.forEach(target => {
+                const spriteName = target.name || 'Sprite';
+
+                // Process Costumes (Images)
+                if (Array.isArray(target.costumes)) {
+                    target.costumes.forEach(costume => {
+                        const ext = costume.dataFormat || 'png';
+                        const md5ext = costume.md5ext || `${costume.assetId}.${ext}`;
+                        // Sanitize filename to prevent invalid characters
+                        const cleanName = sanitizeFilename(costume.name);
+                        
+                        assetMap[md5ext] = {
+                            originalName: `${cleanName}.${ext}`,
+                            spriteName: spriteName,
+                            type: 'image'
+                        };
+                    });
+                }
+
+                // Process Sounds (Audio)
+                if (Array.isArray(target.sounds)) {
+                    target.sounds.forEach(sound => {
+                        const ext = sound.dataFormat || 'wav';
+                        const md5ext = sound.md5ext || `${sound.assetId}.${ext}`;
+                        const cleanName = sanitizeFilename(sound.name);
+
+                        assetMap[md5ext] = {
+                            originalName: `${cleanName}.${ext}`,
+                            spriteName: spriteName,
+                            type: 'audio'
+                        };
+                    });
+                }
+            });
+
+            return assetMap;
+        }
+
+        function sanitizeFilename(name) {
+            return name.replace(/[\\/:*?"<>|]/g, '_');
+        }
+
+        function showStatus(title, desc) {
+            statusTitle.textContent = title;
+            statusDesc.textContent = desc;
+            statusSection.classList.remove('hidden');
+        }
+
+        function hideStatus() {
+            statusSection.classList.add('hidden');
+        }
+
+        function renderAssetList() {
+            assetList.innerHTML = '';
+            fileNameDisplay.textContent = currentFileName;
+            assetCountBadge.textContent = `${processedAssets.length} 個のアセット検出`;
+
+            if (processedAssets.length === 0) {
+                assetList.innerHTML = `
+                    <div class="p-8 text-center text-slate-400">
+                        該当する画像・音声ファイルが見つかりませんでした。
+                    </div>
+                `;
+                return;
+            }
+
+            processedAssets.forEach((asset, index) => {
+                const row = document.createElement('div');
+                row.className = 'p-4 flex items-center justify-between hover:bg-slate-50 transition duration-150';
+
+                // Asset Icon/Thumbnail
+                let previewHtml = '';
+                const objectUrl = URL.createObjectURL(asset.blob);
+
+                if (asset.type === 'image') {
+                    previewHtml = `<div class="w-12 h-12 rounded bg-slate-200 border border-slate-300 flex items-center justify-center overflow-hidden flex-shrink-0">
+                        <img src="${objectUrl}" class="max-w-full max-h-full object-contain" alt="preview">
+                    </div>`;
+                } else {
+                    previewHtml = `<div class="w-12 h-12 rounded bg-amber-100 border border-amber-200 text-amber-600 flex items-center justify-center flex-shrink-0">
+                        <i class="fa-solid fa-music text-lg"></i>
+                    </div>`;
+                }
+
+                row.innerHTML = `
+                    <div class="flex items-center space-x-4 min-w-0 flex-1 pr-4">
+                        ${previewHtml}
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center space-x-2">
+                                <span class="font-semibold text-slate-800 truncate text-sm">${asset.originalName}</span>
+                                <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded border border-slate-200">${asset.spriteName}</span>
+                            </div>
+                            <p class="text-xs text-slate-400 font-mono truncate mt-0.5">元名: ${asset.hashName}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="downloadSingle(${index})" class="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition" title="このファイルを単体保存">
+                            <i class="fa-solid fa-download"></i>
+                        </button>
+                    </div>
+                `;
+                assetList.appendChild(row);
+            });
+        }
+
+        window.downloadSingle = function(index) {
+            const asset = processedAssets[index];
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(asset.blob);
+            link.download = asset.originalName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
+        downloadZipBtn.addEventListener('click', async () => {
+            if (!processedAssets.length) return;
+
+            showStatus('ZIPファイルを作成中...', '復元したファイル名で圧縮しています');
+            const outZip = new JSZip();
+
+            // Add assets with original filenames into ZIP
+            processedAssets.forEach(asset => {
+                // Organize in folders by Sprite Name if multi-sprite project
+                const folder = outZip.folder(asset.spriteName);
+                folder.file(asset.originalName, asset.blob);
+            });
+
+            const content = await outZip.generateAsync({ type: 'blob' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(content);
+            const exportName = currentFileName.replace(/\.(sb3|sprite3|zip)$/i, '') + '_restored.zip';
+            link.download = exportName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            hideStatus();
+        });
+    </script>
+</body>
+</html>
