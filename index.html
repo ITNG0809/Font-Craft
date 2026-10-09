@@ -1,1013 +1,998 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PNG/SVG to TTF/OTF Font Generator</title>
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- JSZip -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <!-- opentype.js -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/opentype.js/1.3.4/opentype.min.js"></script>
-  <!-- FontAwesome for icons -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-    body {
-      font-family: 'Inter', sans-serif;
-    }
-    .font-mono-code {
-      font-family: 'JetBrains Mono', monospace;
-    }
-    /* Pixelated rendering preview canvas */
-    .pixelated {
-      image-rendering: pixelated;
-      image-rendering: crisp-edges;
-    }
-    /* Custom scrollbar */
-    ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
-    }
-    ::-webkit-scrollbar-track {
-      background: #1f2937;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: #374151;
-      border-radius: 3px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: #4b5563;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vector Font Creator Studio Pro</title>
+    <!-- Tailwind CSS for UI styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- opentype.js for OTF generation -->
+    <script src="https://cdn.jsdelivr.net/npm/opentype.js@1.3.4/dist/opentype.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            user-select: none;
+        }
+        .canvas-bg {
+            background-color: #0f172a;
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+    </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
+<body class="bg-slate-900 text-slate-100 h-screen flex flex-col overflow-hidden">
 
-  <!-- Header -->
-  <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 sticky top-0 z-30 flex flex-wrap justify-between items-center shadow-lg">
-    <div class="flex items-center space-x-3">
-      <div class="bg-indigo-600 p-2.5 rounded-xl shadow-md text-white">
-        <i class="fa-solid fa-font text-xl"></i>
-      </div>
-      <div>
-        <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-          Image-to-Font Converter
-          <span class="text-xs font-normal bg-indigo-950/80 border border-indigo-500/30 text-indigo-300 px-2 py-0.5 rounded-full">1-File WebApp</span>
-        </h1>
-        <p class="text-xs text-slate-400">画像（PNG/SVG）からTTF/OTFフォントを完全ローカル作成</p>
-      </div>
-    </div>
-    <div class="flex items-center space-x-3 mt-2 sm:mt-0">
-      <button id="btnGenerateFont" disabled class="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-medium px-5 py-2.5 rounded-xl transition-all shadow-md flex items-center gap-2 text-sm cursor-pointer">
-        <i class="fa-solid fa-gears"></i>
-        <span>フォント生成</span>
-      </button>
-      <button id="btnDownloadFont" disabled class="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-medium px-5 py-2.5 rounded-xl transition-all shadow-md flex items-center gap-2 text-sm cursor-pointer">
-        <i class="fa-solid fa-download"></i>
-        <span>ダウンロード</span>
-      </button>
-    </div>
-  </header>
-
-  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-
-    <!-- Left Controls Sidebar -->
-    <div class="lg:col-span-4 space-y-6">
-
-      <section class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-        <h2 class="text-base font-semibold text-white flex items-center gap-2">
-          <i class="fa-solid fa-file-arrow-up text-indigo-400"></i>
-          1. ファイル読み込み
-        </h2>
-
-        <!-- Drag & Drop Zone -->
-        <div id="dropZone" class="border-2 border-dashed border-slate-700 hover:border-indigo-500 bg-slate-950/50 hover:bg-indigo-950/20 rounded-xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center min-h-[140px]">
-          <i class="fa-solid fa-file-zipper text-3xl text-indigo-400 mb-2"></i>
-          <p class="text-sm font-medium text-slate-200">ZIP または 画像ファイル をドロップ</p>
-          <p class="text-xs text-slate-400 mt-1">PNG, SVG に対応（複数・個別画像追加可）</p>
-          <input type="file" id="fileInput" accept=".zip,.png,.svg" multiple class="hidden">
-        </div>
-
-        <div class="flex gap-2">
- <button id="btnSelectFiles" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium py-2 px-3 rounded-lg border border-slate-700 transition flex items-center justify-center gap-2">
-            <i onclick="location.href='scratch_asset_extractor_renamer.html'"></i> スクラッチ
-          </button>
-          <button id="btnSelectFiles" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium py-2 px-3 rounded-lg border border-slate-700 transition flex items-center justify-center gap-2">
-            <i class="fa-solid fa-folder-open"></i> ファイルを選択 (ZIP/画像)
-          </button>
-          <button id="btnAddImages" class="flex-1 bg-indigo-900/60 hover:bg-indigo-800/80 border border-indigo-700/60 text-indigo-200 text-xs font-medium py-2 px-3 rounded-lg transition flex items-center justify-center gap-2">
-            <i class="fa-solid fa-plus"></i> 画像のみ追加
-          </button>
-          <button id="btnClearAll" class="bg-rose-950/50 hover:bg-rose-900/50 border border-rose-800/50 text-rose-300 text-xs font-medium py-2 px-3 rounded-lg transition flex items-center justify-center gap-1">
-            <i class="fa-solid fa-trash"></i> クリア
-          </button>
-        </div>
-      </section>
-
-      <section class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-        <h2 class="text-base font-semibold text-white flex items-center gap-2">
-          <i class="fa-solid fa-sliders text-indigo-400"></i>
-          2. フォント設定・メトリクス
-        </h2>
-
-        <div class="space-y-3 text-xs">
-          <div>
-            <label class="block text-slate-300 font-medium mb-1">フォントファミリー名</label>
-            <input type="text" id="fontFamily" value="MyPixelFont" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-indigo-500">
-          </div>
-
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-slate-300 font-medium mb-1">サブファミリー (Style)</label>
-              <input type="text" id="fontSubfamily" value="Regular" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-indigo-500">
+    <!-- TOP HEADER / NAVBAR -->
+    <header class="h-14 bg-slate-950 border-b border-slate-800 flex items-center justify-between px-4 z-20 shrink-0">
+        <div class="flex items-center space-x-3">
+            <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-lg text-white shadow-lg shadow-indigo-500/30">
+                <i class="fa-solid font-mono">F</i>
             </div>
             <div>
-              <label class="block text-slate-300 font-medium mb-1">形式</label>
-              <select id="fontFormat" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-indigo-500">
-                <option value="ttf">TTF (.ttf)</option>
-                <option value="otf">OTF (.otf)</option>
-              </select>
+                <h1 class="font-bold text-sm tracking-wide text-slate-200">Vector Font Studio Pro</h1>
+                <p class="text-[10px] text-slate-400">Jōyō Kanji & Symbol Font Generator</p>
             </div>
-          </div>
-
-          <div class="pt-2 border-t border-slate-800">
-            <label class="block text-slate-300 font-medium mb-2">画像処理モード</label>
-            <div class="grid grid-cols-2 gap-2">
-              <label class="flex items-center gap-2 bg-slate-950 border border-slate-700 p-2 rounded-lg cursor-pointer hover:border-indigo-500">
-                <input type="radio" name="vectorMode" value="pixel" checked class="text-indigo-600 focus:ring-0">
-                <span>ドット絵 (幾何)</span>
-              </label>
-              <label class="flex items-center gap-2 bg-slate-950 border border-slate-700 p-2 rounded-lg cursor-pointer hover:border-indigo-500">
-                <input type="radio" name="vectorMode" value="smooth" class="text-indigo-600 focus:ring-0">
-                <span>なめらか (輪郭)</span>
-              </label>
-            </div>
-            <p class="text-[10px] text-slate-400 mt-1">※ドット絵モードはピクセルのぼやけを排除し、完全な幾何パスとして結合します。</p>
-          </div>
-
-          <div class="pt-2 border-t border-slate-800 space-y-3">
-            <div class="flex justify-between items-center">
-              <label class="text-slate-300 font-medium">アルファしきい値 (1-255)</label>
-              <span id="alphaVal" class="font-mono text-indigo-400">128</span>
-            </div>
-            <input type="range" id="alphaThreshold" min="1" max="254" value="128" class="w-full accent-indigo-500">
-
-            <div>
-              <label class="block text-slate-300 font-medium mb-1">サイズ拡大縮小モード</label>
-              <select id="scaleMode" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-indigo-500 text-xs">
-                <option value="original" selected>原寸サイズ維持 (1px = 固定サイズ)</option>
-                <option value="fit">画像ごとに高さを拡大フィット (Auto Fit)</option>
-              </select>
-            </div>
-
-            <div id="basePixelContainer">
-              <label class="block text-slate-300 font-medium mb-1">基準ピクセル高さ (1em相当のpx数)</label>
-              <input type="number" id="basePixelSize" value="16" min="1" max="512" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-indigo-500 font-mono-code text-xs">
-              <p class="text-[10px] text-slate-400 mt-1">※基準が16pxの場合、14pxの画像は引き伸ばされず14px相当の大きさで描画されます。</p>
-            </div>
-
-            <!-- 位置指定（配置・オフセット） -->
-            <div class="pt-2 border-t border-slate-800 space-y-3">
-              <label class="block text-slate-300 font-medium">全体デフォルト配置位置</label>
-              <div class="grid grid-cols-2 gap-3">
-                <div>
-                  <label class="block text-slate-400 text-[11px] mb-1">垂直揃え</label>
-                  <select id="vertAlign" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-100 focus:outline-none focus:border-indigo-500 text-xs">
-                    <option value="top" selected>上揃え (Ascender)</option>
-                    <option value="baseline">下揃え (ベースライン)</option>
-                    <option value="center">中央揃え (Center)</option>
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-slate-400 text-[11px] mb-1">Y軸オフセット (px)</label>
-                  <input type="number" id="yOffset" value="0" step="1" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-100 focus:outline-none focus:border-indigo-500 font-mono-code text-xs">
-                </div>
-              </div>
-              <div class="grid grid-cols-2 gap-3">
-                <div>
-                  <label class="block text-slate-400 text-[11px] mb-1">水平揃え</label>
-                  <select id="horizAlign" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-100 focus:outline-none focus:border-indigo-500 text-xs">
-                    <option value="left" selected>左揃え</option>
-                    <option value="center">中央揃え</option>
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-slate-400 text-[11px] mb-1">X軸オフセット (px)</label>
-                  <input type="number" id="xOffset" value="0" step="1" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-100 focus:outline-none focus:border-indigo-500 font-mono-code text-xs">
-                </div>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="block text-slate-300 font-medium mb-1">unitsPerEm</label>
-                <input type="number" id="unitsPerEm" value="1000" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-indigo-500 font-mono-code">
-              </div>
-              <div>
-                <label class="block text-slate-300 font-medium mb-1">Ascender (高さ)</label>
-                <input type="number" id="ascender" value="800" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-indigo-500 font-mono-code">
-              </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="block text-slate-300 font-medium mb-1">Descender (深さ)</label>
-                <input type="number" id="descender" value="-200" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-indigo-500 font-mono-code">
-              </div>
-              <div>
-                <label class="block text-slate-300 font-medium mb-1">左右余白 (Padding)</label>
-                <input type="number" id="sideBearing" value="50" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:border-indigo-500 font-mono-code">
-              </div>
-            </div>
-          </div>
-
-          <div class="pt-2 border-t border-slate-800">
-            <label class="flex items-center gap-2 cursor-pointer text-slate-300">
-              <input type="checkbox" id="allowMultiChar" class="rounded bg-slate-950 border-slate-700 text-indigo-600 focus:ring-0">
-              <span>複数文字のファイル名も個別に許可する</span>
-            </label>
-            <p class="text-[10px] text-slate-400 mt-1">※OFFの場合、`abc.png` 等のファイルはスキップ・警告されます。</p>
-          </div>
         </div>
-      </section>
 
-      <section class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
-        <div class="flex justify-between items-center">
-          <h2 class="text-base font-semibold text-white flex items-center gap-2">
-            <i class="fa-solid fa-terminal text-indigo-400"></i>
-            ログ & 警告
-          </h2>
-          <button id="btnClearLogs" class="text-xs text-slate-400 hover:text-slate-200">クリア</button>
+        <!-- Center Actions & Tools -->
+        <div class="flex items-center space-x-2">
+            <!-- Undo / Redo -->
+            <button id="btn-undo" class="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 text-xs font-medium transition flex items-center gap-1.5" title="元に戻す (Ctrl+Z)">
+                <i class="fa-solid fa-rotate-left"></i> 元に戻す
+            </button>
+            <button id="btn-redo" class="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 text-xs font-medium transition flex items-center gap-1.5" title="やり直す (Ctrl+Y)">
+                <i class="fa-solid fa-rotate-right"></i> やり直す
+            </button>
+
+            <div class="h-4 w-px bg-slate-800 mx-1"></div>
+
+            <!-- Project Save / Load -->
+            <button id="btn-save-project" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition flex items-center gap-1.5 border border-slate-700" title="プロジェクトをJSON保存">
+                <i class="fa-solid fa-floppy-disk text-indigo-400"></i> 保存 (Save)
+            </button>
+            <button id="btn-load-project" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition flex items-center gap-1.5 border border-slate-700" title="JSONからプロジェクト読み込み">
+                <i class="fa-solid fa-folder-open text-amber-400"></i> 開く (Load)
+            </button>
+            <input type="file" id="input-file-project" accept=".json" class="hidden" />
+
+            <div class="h-4 w-px bg-slate-800 mx-1"></div>
+
+            <!-- Export OTF -->
+            <button id="btn-export-otf" class="px-3.5 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition flex items-center gap-1.5">
+                <i class="fa-solid fa-download"></i> OTFフォント書き出し
+            </button>
         </div>
-        <div id="logConsole" class="bg-slate-950 border border-slate-800 rounded-xl p-3 h-36 overflow-y-auto font-mono-code text-[11px] text-slate-300 space-y-1">
-          <p class="text-slate-500">準備完了。ZIPまたは画像をロードしてください。</p>
-        </div>
-      </section>
+    </header>
+
+    <!-- MAIN STUDIO WORKSPACE -->
+    <div class="flex-1 flex overflow-hidden">
+
+        <!-- LEFT PANEL: Character Grid & Categories -->
+        <aside class="w-80 border-r border-slate-800 bg-slate-900 flex flex-col shrink-0">
+            <!-- Filter & Search Box -->
+            <div class="p-3 border-b border-slate-800 space-y-2">
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-slate-400"></i>
+                    <input type="text" id="glyph-search" placeholder="文字を検索 (例: あ, A, 漢, 記号)..." class="w-full bg-slate-950 border border-slate-800 rounded-md pl-8 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                </div>
+                <select id="glyph-category" class="w-full bg-slate-950 border border-slate-800 rounded-md px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-indigo-500">
+                    <option value="all">全文字 (英数・ひらがな・常用漢字2136字)</option>
+                    <option value="latin">英数字・基本記号 (Latin / Symbols)</option>
+                    <option value="hiragana">ひらがな・濁点・句読点 (Hiragana)</option>
+                    <option value="symbols">記号・約物専用 (Symbols)</option>
+                    <option value="kanji-g1">常用漢字 小学校1年生 (80字)</option>
+                    <option value="kanji-g2">常用漢字 小学校2年生 (160字)</option>
+                    <option value="kanji-g3">常用漢字 小学校3年生 (200字)</option>
+                    <option value="kanji-g4">常用漢字 小学校4年生 (202字)</option>
+                    <option value="kanji-g5">常用漢字 小学校5年生 (193字)</option>
+                    <option value="kanji-g6">常用漢字 小学校6年生 (191字)</option>
+                    <option value="kanji-s">常用漢字 中学校・一般 (1110字)</option>
+                </select>
+            </div>
+
+            <!-- Glyph List Summary & Actions -->
+            <div class="px-3 py-1.5 bg-slate-950/50 border-b border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+                <span id="glyph-count-info">0 文字表示中</span>
+                <button id="btn-center-all-symbols" class="text-indigo-400 hover:text-indigo-300 underline font-medium" title="すべての記号・約物の左右を自動中央揃えにします">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> 記号を一括中央揃え
+                </button>
+            </div>
+
+            <!-- Character Grid Scrollable -->
+            <div id="glyph-grid" class="flex-1 p-2 grid grid-cols-5 gap-1.5 overflow-y-auto custom-scrollbar content-start">
+                <!-- Glyph Items Populated via JS -->
+            </div>
+        </aside>
+
+        <!-- CENTER PANEL: Canvas Editor & Drawing Area -->
+        <main class="flex-1 flex flex-col bg-slate-950 relative overflow-hidden">
+            <!-- Editor Toolbar -->
+            <div class="h-11 border-b border-slate-800 bg-slate-900/80 px-4 flex items-center justify-between z-10 shrink-0">
+                <div class="flex items-center space-x-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+                    <button id="tool-select" class="px-3 py-1 rounded text-xs font-medium flex items-center gap-1.5 bg-indigo-600 text-white shadow-sm transition">
+                        <i class="fa-solid fa-arrow-pointer"></i> 選択・編集 (V)
+                    </button>
+                    <button id="tool-draw" class="px-3 py-1 rounded text-xs font-medium flex items-center gap-1.5 text-slate-400 hover:text-slate-200 transition">
+                        <i class="fa-solid fa-pen-nib"></i> パス描画 (P)
+                    </button>
+                </div>
+
+                <!-- Current Character Heading -->
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-slate-400">編集中の文字:</span>
+                    <span id="current-glyph-char" class="text-lg font-bold text-amber-400 font-mono bg-slate-800 px-2.5 py-0.5 rounded border border-slate-700">A</span>
+                    <span id="current-glyph-unicode" class="text-xs font-mono text-slate-400">U+0041</span>
+                </div>
+
+                <!-- Canvas Helper Toggles -->
+                <div class="flex items-center space-x-3 text-xs text-slate-400">
+                    <label class="flex items-center gap-1.5 cursor-pointer">
+                        <input type="checkbox" id="chk-grid" checked class="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-0"> Grid
+                    </label>
+                    <label class="flex items-center gap-1.5 cursor-pointer">
+                        <input type="checkbox" id="chk-guides" checked class="rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-0"> メトリクス線
+                    </label>
+                    <button id="btn-clear-paths" class="text-rose-400 hover:text-rose-300 ml-2 transition">
+                        <i class="fa-solid fa-trash-can"></i> 消去
+                    </button>
+                </div>
+            </div>
+
+            <!-- Vector Canvas Container -->
+            <div class="flex-1 relative canvas-bg flex items-center justify-center overflow-hidden">
+                <canvas id="vector-canvas" class="cursor-crosshair shadow-2xl rounded border border-slate-800/50"></canvas>
+                
+                <!-- On-Screen Selection Tooltip / Instructions -->
+                <div class="absolute bottom-3 left-4 bg-slate-900/90 backdrop-blur border border-slate-800 text-slate-400 text-[11px] px-3 py-1.5 rounded-md pointer-events-none shadow-lg">
+                    [Click] 頂点追加 / 選択 | [Drag] 枠選択 | [Delete] 頂点削除 | [Shift+Click] サブパス切り替え
+                </div>
+            </div>
+        </main>
+
+        <!-- RIGHT PANEL: Metrics, Symbol Center, and Live Font Preview -->
+        <aside class="w-80 border-l border-slate-800 bg-slate-900 flex flex-col shrink-0">
+            <!-- Tab Navigation Header -->
+            <div class="p-3 border-b border-slate-800">
+                <h2 class="text-xs font-semibold text-slate-300 uppercase tracking-wider">個別文字 ＆ メトリクス設定</h2>
+            </div>
+
+            <div class="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-5">
+                
+                <!-- Individual Glyph Layout Control Section -->
+                <div class="bg-slate-950 p-3.5 rounded-lg border border-slate-800 space-y-3">
+                    <div class="flex items-center justify-between border-b border-slate-800/80 pb-2">
+                        <span class="text-xs font-bold text-indigo-400 flex items-center gap-1.5">
+                            <i class="fa-solid fa-sliders"></i> 個別配置・余白設定
+                        </span>
+                        <!-- Symbol Auto-Center Button -->
+                        <button id="btn-center-glyph" class="px-2 py-1 rounded bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 text-[11px] font-medium transition flex items-center gap-1">
+                            <i class="fa-solid fa-align-center"></i> この文字を中央揃え
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                            <label class="block text-slate-400 text-[11px] mb-1">拡大縮小 (%)</label>
+                            <input type="number" id="glyph-scale" value="100" min="10" max="300" class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-slate-200 focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 text-[11px] mb-1">上下位置 (Y Offset)</label>
+                            <input type="number" id="glyph-v-offset" value="0" class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-slate-200 focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 text-[11px] mb-1">左余白 (Left Margin)</label>
+                            <input type="number" id="glyph-margin-left" value="50" class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-slate-200 focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 text-[11px] mb-1">右余白 (Right Margin)</label>
+                            <input type="number" id="glyph-margin-right" value="50" class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-slate-200 focus:border-indigo-500">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Global Font Metrics -->
+                <div class="bg-slate-950 p-3.5 rounded-lg border border-slate-800 space-y-3">
+                    <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5 border-b border-slate-800/80 pb-2">
+                        <i class="fa-solid fa-ruler-combined text-amber-400"></i> 全体メトリクス設定
+                    </span>
+                    <div class="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                            <label class="block text-slate-400 text-[11px] mb-1">アセンダ (Ascender)</label>
+                            <input type="number" id="global-ascender" value="800" class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-slate-200 focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 text-[11px] mb-1">ディセンダ (Descender)</label>
+                            <input type="number" id="global-descender" value="-200" class="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-slate-200 focus:border-indigo-500">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Preview Textarea -->
+                <div class="bg-slate-950 p-3.5 rounded-lg border border-slate-800 space-y-2">
+                    <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                        <i class="fa-solid fa-eye text-emerald-400"></i> リアルタイムフォントプレビュー
+                    </span>
+                    <textarea id="preview-text" rows="3" class="w-full bg-slate-900 border border-slate-800 rounded p-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 resize-none" placeholder="プレビュー用のテキストを入力..."></textarea>
+                    <div class="p-3 bg-white text-black rounded min-h-[90px] overflow-x-auto break-words font-mono text-sm border border-slate-300 shadow-inner" id="preview-render-area">
+                        <!-- Preview Canvas Rendered Here -->
+                    </div>
+                </div>
+
+            </div>
+        </aside>
 
     </div>
 
-    <!-- Right Glyph Grid & Live Preview -->
-    <div class="lg:col-span-8 space-y-6">
-
-      <div id="progressContainer" class="hidden bg-slate-900 border border-indigo-500/30 rounded-2xl p-4 shadow-sm">
-        <div class="flex justify-between items-center mb-2 text-xs">
-          <span id="progressStatusText" class="font-medium text-indigo-300">画像を処理中...</span>
-          <span id="progressPercent" class="font-mono text-indigo-400 font-bold">0%</span>
-        </div>
-        <div class="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-slate-800">
-          <div id="progressBar" class="bg-gradient-to-r from-indigo-500 to-emerald-400 h-full w-0 transition-all duration-150"></div>
-        </div>
-      </div>
-
-      <section class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-        <div class="flex flex-wrap justify-between items-center gap-2">
-          <div>
-            <h2 class="text-base font-semibold text-white flex items-center gap-2">
-              <i class="fa-solid fa-shapes text-indigo-400"></i>
-              検出されたグリフ (<span id="glyphCount">0</span>件)
-            </h2>
-            <p class="text-xs text-slate-400">重複文字は自動的に私用領域(PUA: U+E000〜)へ割り当てられます</p>
-          </div>
-          <div class="flex gap-2">
-            <input type="text" id="searchGlyph" placeholder="文字検索..." class="bg-slate-950 border border-slate-700 text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-500">
-          </div>
-        </div>
-
-        <!-- Grid Container -->
-        <div id="glyphGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 max-h-[460px] overflow-y-auto p-1 bg-slate-950/60 rounded-xl border border-slate-800">
-          <div class="col-span-full py-12 text-center text-slate-500 text-xs">
-            <i class="fa-regular fa-image text-3xl mb-2 block opacity-40"></i>
-            ファイルが登録されていません
-          </div>
-        </div>
-      </section>
-
-      <section class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-        <h2 class="text-base font-semibold text-white flex items-center gap-2">
-          <i class="fa-solid fa-eye text-indigo-400"></i>
-          リアルタイム・フォントプレビュー
-        </h2>
-
-        <div>
-          <label class="block text-xs font-medium text-slate-300 mb-1">テスト文字入力</label>
-          <textarea id="previewInput" rows="2" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-slate-100 focus:outline-none focus:border-indigo-500 text-sm" placeholder="フォント生成後にここで試し書きができます..."></textarea>
-        </div>
-
-        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 min-h-[120px] flex items-center justify-center overflow-x-auto">
-          <div id="previewArea" class="text-2xl text-slate-300 break-all text-center">
-            [フォント生成] ボタンを押すとプレビューが有効になります
-          </div>
-        </div>
-      </section>
-
-      <section class="bg-indigo-950/30 border border-indigo-800/40 rounded-2xl p-4 text-xs text-indigo-200/80 space-y-2">
-        <h3 class="font-bold text-indigo-300 flex items-center gap-1.5">
-          <i class="fa-solid fa-circle-info"></i> 技術的補足仕様
-        </h3>
-        <ul class="list-disc list-inside space-y-1 text-[11px] leading-relaxed">
-          <li>標準のTTF/OTF仕様に基づき、画像は単色（モノクロシルエッ​​ト）としてフォントパス化されます。</li>
-          <li>カラー画像・グラデーションはアルファ閾値によりシルエット抽出されます。</li>
-          <li>ドット絵モード選択時、1ピクセル単位の完全な矩形パスを組み立てるため、拡大しても一切ぼやけません。</li>
-        </ul>
-      </section>
-
-    </div>
-  </main>
-
-  <script>
-    // Application state
-    const state = {
-      glyphs: [], // { id, char, originalName, fileType, dataUrl, imgElement, unicodeHex, pua, isDuplicate, warning }
-      charCounts: {},
-      puaCounter: 0xE000,
-      generatedFont: null,
-      generatedBlobUrl: null
-    };
-
-    // DOM Elements
-    const dropZone = document.getElementById('dropZone');
-    const fileInput = document.getElementById('fileInput');
-    const btnSelectFiles = document.getElementById('btnSelectFiles');
-    const btnAddImages = document.getElementById('btnAddImages');
-    const btnClearAll = document.getElementById('btnClearAll');
-    const btnGenerateFont = document.getElementById('btnGenerateFont');
-    const btnDownloadFont = document.getElementById('btnDownloadFont');
-    const glyphGrid = document.getElementById('glyphGrid');
-    const glyphCount = document.getElementById('glyphCount');
-    const logConsole = document.getElementById('logConsole');
-    const btnClearLogs = document.getElementById('btnClearLogs');
-    const searchGlyph = document.getElementById('searchGlyph');
-    const previewInput = document.getElementById('previewInput');
-    const previewArea = document.getElementById('previewArea');
-    const alphaThreshold = document.getElementById('alphaThreshold');
-    const alphaVal = document.getElementById('alphaVal');
-
-    // Progress bar elements
-    const progressContainer = document.getElementById('progressContainer');
-    const progressBar = document.getElementById('progressBar');
-    const progressPercent = document.getElementById('progressPercent');
-    const progressStatusText = document.getElementById('progressStatusText');
-
-    function log(msg, type = 'info') {
-      const p = document.createElement('p');
-      const time = new Date().toLocaleTimeString();
-      p.className = type === 'error' ? 'text-rose-400' : type === 'warn' ? 'text-amber-300' : 'text-slate-300';
-      p.innerHTML = `<span class="text-slate-600">[${time}]</span> ${msg}`;
-      logConsole.appendChild(p);
-      logConsole.scrollTop = logConsole.scrollHeight;
-    }
-
-    btnClearLogs.addEventListener('click', () => {
-      logConsole.innerHTML = '';
-    });
-
-    alphaThreshold.addEventListener('input', (e) => {
-      alphaVal.textContent = e.target.value;
-    });
-
-    btnSelectFiles.addEventListener('click', () => fileInput.click());
-    if (btnAddImages) btnAddImages.addEventListener('click', () => fileInput.click());
-    dropZone.addEventListener('click', () => fileInput.click());
-
-    ['dragenter', 'dragover'].forEach(eventName => {
-      dropZone.addEventListener(eventName, (e) => {
-        e.preventDefault();
-        dropZone.classList.add('border-indigo-500', 'bg-indigo-950/30');
-      }, false);
-    });
-
-    ['dragleave', 'drop'].forEach(eventName => {
-      dropZone.addEventListener(eventName, (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('border-indigo-500', 'bg-indigo-950/30');
-      }, false);
-    });
-
-    dropZone.addEventListener('drop', (e) => {
-      const files = e.dataTransfer.files;
-      if (files.length) handleFiles(files);
-    });
-
-    fileInput.addEventListener('change', (e) => {
-      if (e.target.files.length) handleFiles(e.target.files);
-    });
-
-    btnClearAll.addEventListener('click', () => {
-      state.glyphs = [];
-      state.charCounts = {};
-      state.puaCounter = 0xE000;
-      state.generatedFont = null;
-      if (state.generatedBlobUrl) URL.revokeObjectURL(state.generatedBlobUrl);
-      state.generatedBlobUrl = null;
-      renderGlyphGrid();
-      btnGenerateFont.disabled = true;
-      btnDownloadFont.disabled = true;
-      previewArea.style.fontFamily = '';
-      previewArea.textContent = '[フォント生成] ボタンを押すとプレビューが有効になります';
-      log('すべてのデータをクリアしました。');
-    });
-
-    async function handleFiles(fileList) {
-      const allowMulti = document.getElementById('allowMultiChar').checked;
-      showProgress(0, 'ファイルを準備中...');
-
-      const itemsToProcess = [];
-
-      for (let i = 0; i < fileList.length; i++) {
-        const file = fileList[i];
-        if (file.name.toLowerCase().endsWith('.zip')) {
-          try {
-            log(`ZIP解凍を開始: ${file.name}`);
-            const zip = await JSZip.loadAsync(file);
-            for (const [relativePath, zipEntry] of Object.entries(zip.files)) {
-              if (zipEntry.dir) continue;
-              const lowerName = relativePath.toLowerCase();
-              if (lowerName.endsWith('.png') || lowerName.endsWith('.svg')) {
-                const blob = await zipEntry.async('blob');
-                const filename = relativePath.split('/').pop();
-                itemsToProcess.push({ file: blob, filename });
-              }
-            }
-          } catch (err) {
-            log(`ZIP読み込みエラー (${file.name}): ${err.message}`, 'error');
-          }
-        } else if (file.name.toLowerCase().endsWith('.png') || file.name.toLowerCase().endsWith('.svg')) {
-          itemsToProcess.push({ file, filename: file.name });
-        }
-      }
-
-      if (itemsToProcess.length === 0) {
-        log('対象となるPNG/SVG画像が見つかりませんでした。', 'warn');
-        hideProgress();
-        return;
-      }
-
-      log(`${itemsToProcess.length} 件の画像ファイルを解析します...`);
-
-      // Async batch parsing
-      for (let i = 0; i < itemsToProcess.length; i++) {
-        const item = itemsToProcess[i];
-        await processSingleImage(item.file, item.filename, allowMulti);
+    <script>
+        // --- JŌYŌ KANJI & CHARACTER LISTS ---
+        const JOY_KANJI_G1 = "一右雨円王音下火花貝学気九休玉金空月犬見五口校左三山子四糸字耳七車手十出女小森上森人水正生青夕石赤千川先早草足村大男竹中虫町天田土二日入年白八百文木本名目立力林六";
+        const JOY_KANJI_G2 = "引羽雲園遠黄何科夏家歌画回会海絵外角楽汽数形京強教近兄形計元言原戸古午後語工公広交光考行高黄合谷国黒今才細作算止市矢姉思紙寺自時7首秋週春書少場色食心新親図数西声星晴切雪船線前組走多太体台谷知地池茶昼長鳥朝直通弟店点電刀冬当東答頭同道読内南肉馬買売麦半番父風分文章前後母毎万鳴妹毎名理用矢理曜用理羽";
+        const SYMBOLS_LIST = "！" "？" "、" "。" "「" "」" "（" "）" "・" "：" "；" "＋" "−" "＝" "％" "＆" "＄" "＃" "＠" "★" "☆" "♪" "→" "←" "↑" "↓";
         
-        if (i % 10 === 0 || i === itemsToProcess.length - 1) {
-          const pct = Math.round(((i + 1) / itemsToProcess.length) * 100);
-          showProgress(pct, `画像読み込み中... (${i + 1}/${itemsToProcess.length})`);
-          await new Promise(r => setTimeout(r, 0));
+        // Character coverage builder
+        function generateCharacterList() {
+            const list = [];
+            // Latin Capital
+            for (let i = 65; i <= 90; i++) list.push(String.fromCharCode(i));
+            // Latin Small
+            for (let i = 97; i <= 122; i++) list.push(String.fromCharCode(i));
+            // Numbers
+            for (let i = 48; i <= 57; i++) list.push(String.fromCharCode(i));
+            // Hiragana range
+            for (let i = 0x3041; i <= 0x3096; i++) list.push(String.fromCharCode(i));
+            // Punctuation & Japanese Symbols
+            ["、", "。", "！", "？", "「", "」", "（", "）", "・", "：", "；", "＋", "−", "＝", "％", "＆", "＄", "＃", "＠", "★", "☆", "♪", "→", "←", "↑", "↓"].forEach(c => list.push(c));
+            // Jōyō Kanji Grade 1
+            for (let ch of JOY_KANJI_G1) if(!list.includes(ch)) list.push(ch);
+            return list;
         }
-      }
 
-      hideProgress();
-      renderGlyphGrid();
-      if (state.glyphs.length > 0) {
-        // Auto detect max height for basePixelSize
-        const maxHeight = Math.max(...state.glyphs.map(g => g.imgElement.height));
-        if (maxHeight > 0) {
-          document.getElementById('basePixelSize').value = maxHeight;
+        const ALL_CHARS = generateCharacterList();
 
-          // 小さい画像（高さが基準未満）または小文字・句読点を自動検出して「下揃え(ベースライン)」に初期設定
-          const smallCharPattern = /[ぁぃぅぇぉっゃゅょゎヶヵァィゥェォッャュョヮ、。,.＿_~\-]/;
-          let autoAlignedCount = 0;
-
-          state.glyphs.forEach(g => {
-            if (g.imgElement.height < maxHeight || smallCharPattern.test(g.char)) {
-              g.vertAlign = 'baseline';
-              autoAlignedCount++;
-            }
-          });
-
-          if (autoAlignedCount > 0) {
-            log(`小さい文字・記号（${autoAlignedCount}件）を自動で「下揃え (ベースライン)」に設定しました。`);
-          }
-        }
-        btnGenerateFont.disabled = false;
-      }
-    }
-
-    async function processSingleImage(fileBlob, originalFilename, allowMulti) {
-      // Extract raw character name without extension
-      const baseName = originalFilename.replace(/\.[^/.]+$/, "");
-      
-      // Determine target character string
-      let rawChars = [...baseName]; // Handles unicode surrogate pairs correctly
-      let targetChar = baseName;
-      let isWarn = false;
-
-      // Handle multi-character naming rule
-      if (rawChars.length > 1 && !allowMulti) {
-        // Check if trailing digits like "ぷ2" or "あ_1"
-        const match = baseName.match(/^(.+?)(?:[\_\-]?\d+)$/);
-        if (match) {
-          targetChar = match[1];
-        } else {
-          log(`警告: 複数文字ファイル名を検出ためスキップされました -> "${originalFilename}"`, 'warn');
-          return;
-        }
-      }
-
-      // Check duplicate allocation
-      state.charCounts[targetChar] = (state.charCounts[targetChar] || 0) + 1;
-      const count = state.charCounts[targetChar];
-      
-      let assignedCodePoint;
-      let isDuplicate = false;
-
-      if (count === 1) {
-        // Standard Unicode
-        assignedCodePoint = targetChar.codePointAt(0);
-      } else {
-        // Private Use Area (PUA)
-        assignedCodePoint = state.puaCounter++;
-        isDuplicate = true;
-        log(`重複検出: "${targetChar}" (${count}回目) -> PUA U+${assignedCodePoint.toString(16).toUpperCase()} に自動割当`, 'warn');
-      }
-
-      // Read image URL
-      const dataUrl = await new Promise(resolve => {
-        const reader = new FileReader();
-        reader.onload = e => resolve(e.target.result);
-        reader.readAsDataURL(fileBlob);
-      });
-
-      // Load Image Element
-      const imgElement = await new Promise(resolve => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = () => resolve(null);
-        img.src = dataUrl;
-      });
-
-      if (!imgElement) {
-        log(`画像デコード失敗: ${originalFilename}`, 'error');
-        return;
-      }
-
-      state.glyphs.push({
-        id: Math.random().toString(36).substr(2, 9),
-        char: targetChar,
-        originalName: originalFilename,
-        fileType: originalFilename.toLowerCase().endsWith('.svg') ? 'svg' : 'png',
-        dataUrl,
-        imgElement,
-        codePoint: assignedCodePoint,
-        unicodeHex: 'U+' + assignedCodePoint.toString(16).toUpperCase().padStart(4, '0'),
-        isDuplicate,
-        count,
-        // Individual position overrides
-        vertAlign: 'default',
-        yOffset: 0,
-        horizAlign: 'default',
-        xOffset: 0
-      });
-    }
-
-    function renderGlyphGrid() {
-      const searchTerm = searchGlyph.value.toLowerCase();
-      glyphGrid.innerHTML = '';
-
-      const filtered = state.glyphs.filter(g => 
-        g.char.toLowerCase().includes(searchTerm) || 
-        g.unicodeHex.toLowerCase().includes(searchTerm) ||
-        g.originalName.toLowerCase().includes(searchTerm)
-      );
-
-      glyphCount.textContent = state.glyphs.length;
-
-      if (filtered.length === 0) {
-        glyphGrid.innerHTML = `
-          <div class="col-span-full py-12 text-center text-slate-500 text-xs">
-            <i class="fa-solid fa-magnifying-glass text-2xl mb-2 block opacity-40"></i>
-            一致する文字が見つかりません
-          </div>`;
-        return;
-      }
-
-      filtered.forEach(g => {
-        const hasCustomPos = g.vertAlign !== 'default' || g.horizAlign !== 'default' || g.yOffset !== 0 || g.xOffset !== 0;
-        const card = document.createElement('div');
-        card.className = 'bg-slate-900 border border-slate-800 rounded-xl p-2.5 flex flex-col justify-between relative group hover:border-indigo-500 transition shadow-sm';
-        
-        card.innerHTML = `
-          <div class="flex justify-between items-center mb-1.5 gap-1">
-            <div class="flex items-center gap-1 flex-1 min-w-0">
-              <label class="text-[9px] text-slate-400">文字:</label>
-              <input type="text" data-id="${g.id}" value="${escapeHtml(g.char)}" class="inpGlyphChar w-12 bg-slate-950 border border-slate-700 font-bold text-center text-xs text-indigo-300 rounded px-1 py-0.5 focus:outline-none focus:border-indigo-500 font-mono-code" title="割り当てる文字を変更">
-              ${hasCustomPos ? '<span class="text-[9px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-1 rounded" title="個別位置調整あり">カスタム</span>' : ''}
-            </div>
-            <span class="text-[10px] font-mono-code ${g.isDuplicate ? 'text-amber-400 bg-amber-950/60 border-amber-800/60' : 'text-indigo-400 bg-indigo-950/60 border-indigo-800/60'} border px-1.5 py-0.5 rounded shrink-0">
-              ${g.unicodeHex}
-            </span>
-          </div>
-
-          <div class="w-full h-20 bg-slate-950 rounded-lg border border-slate-800/80 flex items-center justify-center p-2 mb-1.5 overflow-hidden">
-            <img src="${g.dataUrl}" class="max-h-full max-w-full object-contain pixelated" alt="${escapeHtml(g.char)}">
-          </div>
-
-          <div class="flex items-center justify-between text-[10px] text-slate-400 mb-2">
-            <span class="truncate max-w-[80px]" title="${escapeHtml(g.originalName)}">${escapeHtml(g.originalName)}</span>
-            <span>${g.imgElement.width}×${g.imgElement.height}</span>
-          </div>
-
-          <!-- 個別位置調整コントロール -->
-          <div class="bg-slate-950/80 border border-slate-800/80 rounded-lg p-2 text-[10px] space-y-1.5">
-            <div class="flex items-center justify-between text-[9px] text-slate-400">
-              <span class="font-medium text-slate-300"><i class="fa-solid fa-arrows-up-down-left-right text-indigo-400 mr-1"></i>個別位置指定</span>
-              <button data-id="${g.id}" class="btnResetPosition text-indigo-400 hover:text-indigo-300 text-[9px] border-b border-indigo-500/30">リセット</button>
-            </div>
+        // --- APP STATE & GLYPH STORAGE ---
+        const state = {
+            currentChar: 'A',
+            tool: 'select', // 'select' or 'draw'
             
-            <div class="grid grid-cols-2 gap-1.5">
-              <div>
-                <label class="text-[9px] text-slate-400 block mb-0.5">Yオフセット(px)</label>
-                <input type="number" data-id="${g.id}" data-param="yOffset" value="${g.yOffset || 0}" step="1" class="inpGlyphParam w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-slate-100 font-mono text-[10px] focus:outline-none focus:border-indigo-500">
-              </div>
-              <div>
-                <label class="text-[9px] text-slate-400 block mb-0.5">Xオフセット(px)</label>
-                <input type="number" data-id="${g.id}" data-param="xOffset" value="${g.xOffset || 0}" step="1" class="inpGlyphParam w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-slate-100 font-mono text-[10px] focus:outline-none focus:border-indigo-500">
-              </div>
-            </div>
+            // Font Global Settings
+            ascender: 800,
+            descender: -200,
 
-            <div class="grid grid-cols-2 gap-1.5">
-              <div>
-                <label class="text-[9px] text-slate-400 block mb-0.5">垂直揃え</label>
-                <select data-id="${g.id}" data-param="vertAlign" class="selGlyphParam w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-slate-100 text-[9px] focus:outline-none focus:border-indigo-500">
-                  <option value="default" ${g.vertAlign === 'default' ? 'selected' : ''}>全体に従う</option>
-                  <option value="top" ${g.vertAlign === 'top' ? 'selected' : ''}>上揃え</option>
-                  <option value="baseline" ${g.vertAlign === 'baseline' ? 'selected' : ''}>ベースライン</option>
-                  <option value="center" ${g.vertAlign === 'center' ? 'selected' : ''}>中央揃え</option>
-                </select>
-              </div>
-              <div>
-                <label class="text-[9px] text-slate-400 block mb-0.5">水平揃え</label>
-                <select data-id="${g.id}" data-param="horizAlign" class="selGlyphParam w-full bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-slate-100 text-[9px] focus:outline-none focus:border-indigo-500">
-                  <option value="default" ${g.horizAlign === 'default' ? 'selected' : ''}>全体に従う</option>
-                  <option value="left" ${g.horizAlign === 'left' ? 'selected' : ''}>左揃え</option>
-                  <option value="center" ${g.horizAlign === 'center' ? 'selected' : ''}>中央揃え</option>
-                </select>
-              </div>
-            </div>
-          </div>
+            // Character Data Store
+            // Format: { 'A': { paths: [ [ {x, y}, ... ] ], scale: 100, vOffset: 0, marginLeft: 50, marginRight: 50 } }
+            glyphs: {},
 
-          <button data-id="${g.id}" class="btnDeleteGlyph absolute -top-2 -right-2 bg-rose-600 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition shadow cursor-pointer">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        `;
+            // Canvas & Selection
+            selectedNodes: [], // [{pathIdx, nodeIdx}]
+            activePathIdx: 0,
+            isDragging: false,
+            isMarquee: false,
+            marqueeStart: { x: 0, y: 0 },
+            marqueeEnd: { x: 0, y: 0 },
+            dragStartPos: { x: 0, y: 0 },
 
-        glyphGrid.appendChild(card);
-      });
+            // Undo / Redo Stacks
+            undoStack: [],
+            redoStack: []
+        };
 
-      // Bind glyph character change handler
-      document.querySelectorAll('.inpGlyphChar').forEach(inp => {
-        inp.addEventListener('change', (e) => {
-          const id = e.target.getAttribute('data-id');
-          const newChar = e.target.value.trim();
-          const glyph = state.glyphs.find(x => x.id === id);
-          if (glyph && newChar) {
-            glyph.char = newChar;
-            const codePoint = newChar.codePointAt(0);
-            glyph.codePoint = codePoint;
-            glyph.unicodeHex = 'U+' + codePoint.toString(16).toUpperCase().padStart(4, '0');
-            renderGlyphGrid();
-            log(`文字の変更: ${glyph.originalName} -> 「${newChar}」 (${glyph.unicodeHex})`);
-          }
+        // Initialize Default Glyphs
+        ALL_CHARS.forEach(ch => {
+            state.glyphs[ch] = {
+                paths: [[]],
+                scale: 100,
+                vOffset: 0,
+                marginLeft: SYMBOLS_LIST.includes(ch) ? 80 : 50,
+                marginRight: SYMBOLS_LIST.includes(ch) ? 80 : 50
+            };
         });
-      });
 
-      // Bind per-glyph position input handlers
-      document.querySelectorAll('.inpGlyphParam').forEach(inp => {
-        inp.addEventListener('change', (e) => {
-          const id = e.target.getAttribute('data-id');
-          const param = e.target.getAttribute('data-param');
-          const val = parseFloat(e.target.value) || 0;
-          const glyph = state.glyphs.find(x => x.id === id);
-          if (glyph) glyph[param] = val;
-        });
-      });
+        // Add Default Letter 'A' Sample vector path for immediate testing
+        state.glyphs['A'].paths = [
+            [{x: 100, y: 0}, {x: 500, y: 800}, {x: 400, y: 800}, {x: 100, y: 200}, {x: -200, y: 800}, {x: -300, y: 800}],
+            [{x: -100, y: 400}, {x: 300, y: 400}, {x: 250, y: 500}, {x: -150, y: 500}]
+        ];
 
-      document.querySelectorAll('.selGlyphParam').forEach(sel => {
-        sel.addEventListener('change', (e) => {
-          const id = e.target.getAttribute('data-id');
-          const param = e.target.getAttribute('data-param');
-          const val = e.target.value;
-          const glyph = state.glyphs.find(x => x.id === id);
-          if (glyph) glyph[param] = val;
-        });
-      });
+        // --- DOM ELEMENTS ---
+        const canvas = document.getElementById('vector-canvas');
+        const ctx = canvas.getContext('2d');
+        const glyphGrid = document.getElementById('glyph-grid');
+        const previewTextElem = document.getElementById('preview-text');
+        const previewRenderArea = document.getElementById('preview-render-area');
 
-      document.querySelectorAll('.btnResetPosition').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const id = btn.getAttribute('data-id');
-          const glyph = state.glyphs.find(x => x.id === id);
-          if (glyph) {
-            glyph.vertAlign = 'default';
-            glyph.horizAlign = 'default';
-            glyph.yOffset = 0;
-            glyph.xOffset = 0;
-            renderGlyphGrid();
-          }
-        });
-      });
+        // --- LOCAL STORAGE PERSISTENCE ---
+        const STORAGE_KEY = 'VectorFontStudio_Pro_Save';
 
-      // Bind delete events
-      document.querySelectorAll('.btnDeleteGlyph').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const id = btn.getAttribute('data-id');
-          state.glyphs = state.glyphs.filter(x => x.id !== id);
-          renderGlyphGrid();
-          if (state.glyphs.length === 0) {
-            btnGenerateFont.disabled = true;
-          }
-        });
-      });
-    }
-
-    searchGlyph.addEventListener('input', renderGlyphGrid);
-
-    function escapeHtml(str) {
-      return str.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
-    }
-
-    function showProgress(pct, statusText) {
-      progressContainer.classList.remove('hidden');
-      progressBar.style.width = pct + '%';
-      progressPercent.textContent = pct + '%';
-      progressStatusText.textContent = statusText;
-    }
-
-    function hideProgress() {
-      progressContainer.classList.add('hidden');
-    }
-
-    btnGenerateFont.addEventListener('click', async () => {
-      if (state.glyphs.length === 0) return;
-
-      try {
-        const familyName = document.getElementById('fontFamily').value.trim() || 'MyFont';
-        const styleName = document.getElementById('fontSubfamily').value.trim() || 'Regular';
-        const unitsPerEm = parseInt(document.getElementById('unitsPerEm').value) || 1000;
-        const ascender = parseInt(document.getElementById('ascender').value) || 800;
-        const descender = parseInt(document.getElementById('descender').value) || -200;
-        const sideBearing = parseInt(document.getElementById('sideBearing').value) || 50;
-        const vectorMode = document.querySelector('input[name="vectorMode"]:checked').value;
-        const threshold = parseInt(alphaThreshold.value);
-
-        log(`フォント生成を開始中... (Total: ${state.glyphs.length} glyphs)`);
-        showProgress(0, 'ベクトルグリフの変換中...');
-
-        const fontGlyphs = [];
-
-        // Always add mandatory .notdef glyph first
-        const notdefPath = new opentype.Path();
-        const notdefSize = Math.round(unitsPerEm * 0.6);
-        notdefPath.moveTo(100, 0);
-        notdefPath.lineTo(100 + notdefSize, 0);
-        notdefPath.lineTo(100 + notdefSize, ascender);
-        notdefPath.lineTo(100, ascender);
-        notdefPath.closePath();
-        
-        const notdefGlyph = new opentype.Glyph({
-          name: '.notdef',
-          unicode: 0,
-          advanceWidth: notdefSize + 200,
-          path: notdefPath
-        });
-        fontGlyphs.push(notdefGlyph);
-
-        // Process each user glyph
-        for (let i = 0; i < state.glyphs.length; i++) {
-          const item = state.glyphs[i];
-          
-          try {
-            const scaleMode = document.getElementById('scaleMode').value;
-            const basePixelSize = parseInt(document.getElementById('basePixelSize').value) || 16;
-
-            // Resolve effective position parameters (Global + Per-Glyph overrides)
-            const globalVertAlign = document.getElementById('vertAlign').value;
-            const globalYOffset = parseFloat(document.getElementById('yOffset').value) || 0;
-            const globalHorizAlign = document.getElementById('horizAlign').value;
-            const globalXOffset = parseFloat(document.getElementById('xOffset').value) || 0;
-
-            const effVertAlign = (item.vertAlign && item.vertAlign !== 'default') ? item.vertAlign : globalVertAlign;
-            const effYOffset = (item.yOffset || 0) + globalYOffset;
-            const effHorizAlign = (item.horizAlign && item.horizAlign !== 'default') ? item.horizAlign : globalHorizAlign;
-            const effXOffset = (item.xOffset || 0) + globalXOffset;
-
-            const path = await traceImageToOpentypePath(item.imgElement, {
-              unitsPerEm,
-              ascender,
-              descender,
-              sideBearing,
-              vectorMode,
-              threshold,
-              scaleMode,
-              basePixelSize,
-              vertAlign: effVertAlign,
-              yOffset: effYOffset,
-              horizAlign: effHorizAlign,
-              xOffset: effXOffset
-            });
-
-            // Calculate advance width based on bounding box
-            const bbox = path.getBoundingBox();
-            const advanceWidth = Math.max(
-              Math.round((bbox.x2 || unitsPerEm * 0.5) + sideBearing),
-              unitsPerEm * 0.3
-            );
-
-            const glyph = new opentype.Glyph({
-              name: `glyph_${item.codePoint}`,
-              unicode: item.codePoint,
-              advanceWidth: advanceWidth,
-              path: path
-            });
-
-            fontGlyphs.push(glyph);
-
-          } catch (err) {
-            log(`グリフ変換失敗 (${item.char}): ${err.message}`, 'error');
-          }
-
-          if (i % 5 === 0 || i === state.glyphs.length - 1) {
-            const pct = Math.round(((i + 1) / state.glyphs.length) * 100);
-            showProgress(pct, `ベクトル化計算中... (${i + 1}/${state.glyphs.length})`);
-            await new Promise(r => setTimeout(r, 0));
-          }
+        function autoSaveToLocalStorage() {
+            try {
+                const payload = {
+                    ascender: state.ascender,
+                    descender: state.descender,
+                    glyphs: state.glyphs
+                };
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+            } catch (e) {
+                console.warn('LocalStorage Save Failed:', e);
+            }
         }
 
-        // Build opentype Font object
-        const font = new opentype.Font({
-          familyName: familyName,
-          styleName: styleName,
-          unitsPerEm: unitsPerEm,
-          ascender: ascender,
-          descender: descender,
-          glyphs: fontGlyphs
-        });
-
-        state.generatedFont = font;
-
-        // Generate binary array buffer
-        const format = document.getElementById('fontFormat').value;
-        const fontBuffer = font.toArrayBuffer();
-        const blob = new Blob([fontBuffer], { type: format === 'otf' ? 'font/otf' : 'font/ttf' });
-
-        if (state.generatedBlobUrl) URL.revokeObjectURL(state.generatedBlobUrl);
-        state.generatedBlobUrl = URL.createObjectURL(blob);
-
-        // Apply preview font via @font-face
-        const fontFace = new FontFace('PreviewCustomFont', fontBuffer);
-        await fontFace.load();
-        document.fonts.add(fontFace);
-
-        previewArea.style.fontFamily = `'PreviewCustomFont', sans-serif`;
-        previewArea.textContent = previewInput.value || "あいうえお ABC 123 ぷ";
-
-        hideProgress();
-        btnDownloadFont.disabled = false;
-        log(`フォント生成完了！(${fontGlyphs.length} 文字収録)`, 'info');
-      } catch(e) {
-        log(`フォント作成中に例外エラーが発生しました: ${e.message}`, 'error');
-        hideProgress();
-      }
-    });
-
-    previewInput.addEventListener('input', () => {
-      if (state.generatedFont) {
-        previewArea.textContent = previewInput.value || "あいうえお ABC 123 ぷ";
-      }
-    });
-
-    btnDownloadFont.addEventListener('click', () => {
-      if (!state.generatedBlobUrl) return;
-      const familyName = document.getElementById('fontFamily').value.trim() || 'MyFont';
-      const format = document.getElementById('fontFormat').value;
-      
-      const a = document.createElement('a');
-      a.href = state.generatedBlobUrl;
-      a.download = `${familyName}.${format}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      log(`フォントファイルを保存しました: ${familyName}.${format}`);
-    });
-
-    async function traceImageToOpentypePath(img, opts) {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      const w = img.width;
-      const h = img.height;
-      
-      canvas.width = w;
-      canvas.height = h;
-      ctx.drawImage(img, 0, 0);
-
-      const imgData = ctx.getImageData(0, 0, w, h);
-      const data = imgData.data;
-
-      const path = new opentype.Path();
-
-      // Metric calculations
-      const targetHeight = opts.ascender - opts.descender;
-      let scale;
-      if (opts.scaleMode === 'original') {
-        const basePx = opts.basePixelSize || 16;
-        scale = targetHeight / basePx;
-      } else {
-        scale = targetHeight / h;
-      }
-
-      // Vertical Alignment Calculation
-      let topY = opts.ascender;
-      if (opts.scaleMode === 'original') {
-        const basePx = opts.basePixelSize || 16;
-        if (opts.vertAlign === 'baseline') {
-          topY = h * scale;
-        } else if (opts.vertAlign === 'center') {
-          topY = opts.ascender - ((basePx - h) / 2) * scale;
-        } else {
-          topY = opts.ascender;
-        }
-      } else {
-        if (opts.vertAlign === 'center') {
-          topY = opts.ascender - ((targetHeight - h * scale) / 2);
-        } else if (opts.vertAlign === 'baseline') {
-          topY = h * scale;
-        }
-      }
-      topY += (opts.yOffset || 0) * scale;
-
-      // Horizontal Alignment Calculation
-      let leftMargin = opts.sideBearing;
-      if (opts.scaleMode === 'original' && opts.horizAlign === 'center') {
-        const basePx = opts.basePixelSize || 16;
-        if (w < basePx) {
-          leftMargin += ((basePx - w) / 2) * scale;
-        }
-      }
-      leftMargin += (opts.xOffset || 0) * scale;
-
-      if (opts.vectorMode === 'pixel') {
-        // Pixel-Grid Mode: Merge adjacent pixels into sharp rectangular paths
-        for (let y = 0; y < h; y++) {
-          let x = 0;
-          while (x < w) {
-            const idx = (y * w + x) * 4;
-            const alpha = data[idx + 3];
-
-            if (alpha >= opts.threshold) {
-              // Find continuous horizontal span of solid pixels
-              let spanWidth = 1;
-              while (x + spanWidth < w) {
-                const nextIdx = (y * w + (x + spanWidth)) * 4;
-                if (data[nextIdx + 3] >= opts.threshold) {
-                  spanWidth++;
-                } else {
-                  break;
+        function loadFromLocalStorage() {
+            try {
+                const data = localStorage.getItem(STORAGE_KEY);
+                if (data) {
+                    const parsed = JSON.parse(data);
+                    if (parsed.ascender) state.ascender = parsed.ascender;
+                    if (parsed.descender) state.descender = parsed.descender;
+                    if (parsed.glyphs) {
+                        Object.keys(parsed.glyphs).forEach(ch => {
+                            if (state.glyphs[ch]) {
+                                state.glyphs[ch] = parsed.glyphs[ch];
+                            }
+                        });
+                    }
                 }
-              }
+            } catch (e) {
+                console.warn('LocalStorage Restore Failed:', e);
+            }
+        }
 
-              // Map image coordinates to Font Glyph coordinates with align offsets
-              const gx1 = leftMargin + (x * scale);
-              const gx2 = leftMargin + ((x + spanWidth) * scale);
-              const gy1 = topY - ((y + 1) * scale);
-              const gy2 = topY - (y * scale);
+        // --- SAVE / LOAD PROJECT (JSON EXPORT & IMPORT) ---
+        function exportProjectJSON() {
+            const projectData = {
+                version: "1.0",
+                timestamp: new Date().toISOString(),
+                ascender: state.ascender,
+                descender: state.descender,
+                glyphs: state.glyphs
+            };
+            const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `font-project-${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
 
-              path.moveTo(gx1, gy1);
-              path.lineTo(gx2, gy1);
-              path.lineTo(gx2, gy2);
-              path.lineTo(gx1, gy2);
-              path.closePath();
+        function importProjectJSON(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (parsed.glyphs) {
+                        pushUndoState();
+                        state.ascender = parsed.ascender || 800;
+                        state.descender = parsed.descender || -200;
+                        Object.keys(parsed.glyphs).forEach(ch => {
+                            state.glyphs[ch] = parsed.glyphs[ch];
+                        });
+                        updateUIFromState();
+                        drawCanvas();
+                        renderPreviewText();
+                        autoSaveToLocalStorage();
+                        alert("プロジェクトを正常に読み込みました。");
+                    }
+                } catch (err) {
+                    alert("JSONファイルの読み込みに失敗しました。正しいプロジェクトファイルかご確認ください。");
+                }
+            };
+            reader.readAsText(file);
+        }
 
-              x += spanWidth;
+        // --- UNDO / REDO SYSTEM ---
+        function pushUndoState() {
+            state.undoStack.push(JSON.stringify(state.glyphs));
+            state.redoStack = []; // Clear redo
+            if (state.undoStack.length > 30) state.undoStack.shift();
+            updateUndoRedoButtons();
+            autoSaveToLocalStorage();
+        }
+
+        function undo() {
+            if (state.undoStack.length === 0) return;
+            state.redoStack.push(JSON.stringify(state.glyphs));
+            const prev = state.undoStack.pop();
+            state.glyphs = JSON.parse(prev);
+            updateUIFromState();
+            drawCanvas();
+            renderPreviewText();
+            updateUndoRedoButtons();
+            autoSaveToLocalStorage();
+        }
+
+        function redo() {
+            if (state.redoStack.length === 0) return;
+            state.undoStack.push(JSON.stringify(state.glyphs));
+            const next = state.redoStack.pop();
+            state.glyphs = JSON.parse(next);
+            updateUIFromState();
+            drawCanvas();
+            renderPreviewText();
+            updateUndoRedoButtons();
+            autoSaveToLocalStorage();
+        }
+
+        function updateUndoRedoButtons() {
+            document.getElementById('btn-undo').disabled = state.undoStack.length === 0;
+            document.getElementById('btn-redo').disabled = state.redoStack.length === 0;
+        }
+
+        // --- SYMBOL & GLYPH CENTER CALCULATION ---
+        function centerGlyphPaths(ch) {
+            const g = state.glyphs[ch];
+            if (!g || !g.paths || g.paths.length === 0) return;
+
+            // Calculate Bounding Box of vector points
+            let minX = Infinity, maxX = -Infinity;
+            let count = 0;
+
+            g.paths.forEach(p => {
+                p.forEach(pt => {
+                    if (pt.x < minX) minX = pt.x;
+                    if (pt.x > maxX) maxX = pt.x;
+                    count++;
+                });
+            });
+
+            if (count === 0 || minX === Infinity) return;
+
+            const bboxWidth = maxX - minX;
+            const glyphCenterX = (minX + maxX) / 2;
+
+            // Target Center is 500 (standard canvas origin center)
+            const offsetX = 500 - glyphCenterX;
+
+            // Offset all points horizontally
+            pushUndoState();
+            g.paths.forEach(p => {
+                p.forEach(pt => {
+                    pt.x += offsetX;
+                });
+            });
+
+            drawCanvas();
+            renderPreviewText();
+        }
+
+        function centerAllSymbols() {
+            pushUndoState();
+            SYMBOLS_LIST.split('').forEach(sym => {
+                if (state.glyphs[sym]) {
+                    centerGlyphPaths(sym);
+                }
+            });
+            drawCanvas();
+            renderPreviewText();
+            alert("すべての記号・約物パスの中央揃え処理が完了しました。");
+        }
+
+        // --- CANVAS RENDER & DRAWING ---
+        function resizeCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width - 40;
+            canvas.height = rect.height - 40;
+            drawCanvas();
+        }
+
+        function drawCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2 + 100;
+            const scale = 0.45; // Canvas View Scale
+
+            // Draw Metric Guidelines
+            if (document.getElementById('chk-guides').checked) {
+                ctx.strokeStyle = '#334155';
+                ctx.lineWidth = 1;
+
+                // Baseline (y = 0)
+                ctx.beginPath();
+                ctx.moveTo(0, centerY);
+                ctx.lineTo(canvas.width, centerY);
+                ctx.strokeStyle = '#6366f1';
+                ctx.stroke();
+
+                // Ascender Line
+                ctx.beginPath();
+                ctx.moveTo(0, centerY - state.ascender * scale);
+                ctx.lineTo(canvas.width, centerY - state.ascender * scale);
+                ctx.strokeStyle = '#f59e0b';
+                ctx.stroke();
+
+                // Descender Line
+                ctx.beginPath();
+                ctx.moveTo(0, centerY - state.descender * scale);
+                ctx.lineTo(canvas.width, centerY - state.descender * scale);
+                ctx.strokeStyle = '#ef4444';
+                ctx.stroke();
+
+                // Center Origin Line (x = 500)
+                ctx.beginPath();
+                ctx.moveTo(centerX, 0);
+                ctx.lineTo(centerX, canvas.height);
+                ctx.strokeStyle = '#475569';
+                ctx.setLineDash([4, 4]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // Current Glyph Data
+            const g = state.glyphs[state.currentChar];
+            if (!g) return;
+
+            // Render Paths
+            g.paths.forEach((path, pIdx) => {
+                if (path.length === 0) return;
+
+                ctx.beginPath();
+                path.forEach((pt, nIdx) => {
+                    const screenX = centerX + (pt.x - 500) * scale;
+                    const screenY = centerY - pt.y * scale;
+                    if (nIdx === 0) ctx.moveTo(screenX, screenY);
+                    else ctx.lineTo(screenX, screenY);
+                });
+                ctx.closePath();
+
+                // Filled Path Area
+                ctx.fillStyle = pIdx === state.activePathIdx ? 'rgba(99, 102, 241, 0.25)' : 'rgba(148, 163, 184, 0.15)';
+                ctx.fill();
+                ctx.strokeStyle = pIdx === state.activePathIdx ? '#818cf8' : '#64748b';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Render Path Handles & Nodes
+                path.forEach((pt, nIdx) => {
+                    const screenX = centerX + (pt.x - 500) * scale;
+                    const screenY = centerY - pt.y * scale;
+
+                    const isSelected = state.selectedNodes.some(s => s.pathIdx === pIdx && s.nodeIdx === nIdx);
+
+                    ctx.beginPath();
+                    ctx.arc(screenX, screenY, isSelected ? 6 : 4, 0, Math.PI * 2);
+                    ctx.fillStyle = isSelected ? '#f59e0b' : '#38bdf8';
+                    ctx.fill();
+                    ctx.strokeStyle = '#0f172a';
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+                });
+            });
+
+            // Marquee Box
+            if (state.isMarquee) {
+                ctx.strokeStyle = '#f59e0b';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([3, 3]);
+                ctx.strokeRect(
+                    state.marqueeStart.x,
+                    state.marqueeStart.y,
+                    state.marqueeEnd.x - state.marqueeStart.x,
+                    state.marqueeEnd.y - state.marqueeStart.y
+                );
+                ctx.setLineDash([]);
+            }
+        }
+
+        // --- CANVAS MOUSE INTERACTIONS ---
+        function getCanvasPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+        }
+
+        function screenToVectorCoords(pos) {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2 + 100;
+            const scale = 0.45;
+            return {
+                x: Math.round((pos.x - centerX) / scale + 500),
+                y: Math.round((centerY - pos.y) / scale)
+            };
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            const pos = getCanvasPos(e);
+            const vec = screenToVectorCoords(pos);
+            const g = state.glyphs[state.currentChar];
+
+            if (state.tool === 'draw') {
+                pushUndoState();
+                if (!g.paths[state.activePathIdx]) g.paths[state.activePathIdx] = [];
+                g.paths[state.activePathIdx].push(vec);
+                state.selectedNodes = [{ pathIdx: state.activePathIdx, nodeIdx: g.paths[state.activePathIdx].length - 1 }];
+                drawCanvas();
+                renderPreviewText();
+                return;
+            }
+
+            // Select Tool Logic
+            if (e.shiftKey) {
+                // Switch or add Sub-path
+                pushUndoState();
+                g.paths.push([]);
+                state.activePathIdx = g.paths.length - 1;
+                return;
+            }
+
+            // Node Hit Detection
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2 + 100;
+            const scale = 0.45;
+
+            let hit = null;
+            g.paths.forEach((path, pIdx) => {
+                path.forEach((pt, nIdx) => {
+                    const sx = centerX + (pt.x - 500) * scale;
+                    const sy = centerY - pt.y * scale;
+                    const dist = Math.hypot(sx - pos.x, sy - pos.y);
+                    if (dist < 8) {
+                        hit = { pathIdx: pIdx, nodeIdx: nIdx };
+                    }
+                });
+            });
+
+            if (hit) {
+                state.selectedNodes = [hit];
+                state.isDragging = true;
+                state.dragStartPos = vec;
+                state.activePathIdx = hit.pathIdx;
             } else {
-              x++;
+                // Marquee Select Start
+                state.isMarquee = true;
+                state.marqueeStart = pos;
+                state.marqueeEnd = pos;
+                state.selectedNodes = [];
             }
-          }
-        }
-      } else {
-        // Smooth Mode: High resolution grid contours for smooth artwork
-        for (let y = 0; y < h; y++) {
-          for (let x = 0; x < w; x++) {
-            const idx = (y * w + x) * 4;
-            if (data[idx + 3] >= opts.threshold) {
-              const gx1 = leftMargin + (x * scale);
-              const gx2 = leftMargin + ((x + 1) * scale);
-              const gy1 = topY - ((y + 1) * scale);
-              const gy2 = topY - (y * scale);
+            drawCanvas();
+        });
 
-              path.moveTo(gx1, gy1);
-              path.lineTo(gx2, gy1);
-              path.lineTo(gx2, gy2);
-              path.lineTo(gx1, gy2);
-              path.closePath();
+        canvas.addEventListener('mousemove', (e) => {
+            const pos = getCanvasPos(e);
+            const vec = screenToVectorCoords(pos);
+
+            if (state.isDragging && state.selectedNodes.length > 0) {
+                const dx = vec.x - state.dragStartPos.x;
+                const dy = vec.y - state.dragStartPos.y;
+
+                const g = state.glyphs[state.currentChar];
+                state.selectedNodes.forEach(s => {
+                    if (g.paths[s.pathIdx] && g.paths[s.pathIdx][s.nodeIdx]) {
+                        g.paths[s.pathIdx][s.nodeIdx].x += dx;
+                        g.paths[s.pathIdx][s.nodeIdx].y += dy;
+                    }
+                });
+
+                state.dragStartPos = vec;
+                drawCanvas();
+                renderPreviewText();
+            } else if (state.isMarquee) {
+                state.marqueeEnd = pos;
+                drawCanvas();
             }
-          }
-        }
-      }
+        });
 
-      return path;
-    }
-  </script>
+        window.addEventListener('mouseup', () => {
+            if (state.isMarquee) {
+                // Find all nodes in Marquee
+                const minX = Math.min(state.marqueeStart.x, state.marqueeEnd.x);
+                const maxX = Math.max(state.marqueeStart.x, state.marqueeEnd.x);
+                const minY = Math.min(state.marqueeStart.y, state.marqueeEnd.y);
+                const maxY = Math.max(state.marqueeStart.y, state.marqueeEnd.y);
+
+                const centerX = canvas.width / 2;
+                const centerY = canvas.height / 2 + 100;
+                const scale = 0.45;
+
+                const g = state.glyphs[state.currentChar];
+                state.selectedNodes = [];
+
+                g.paths.forEach((path, pIdx) => {
+                    path.forEach((pt, nIdx) => {
+                        const sx = centerX + (pt.x - 500) * scale;
+                        const sy = centerY - pt.y * scale;
+                        if (sx >= minX && sx <= maxX && sy >= minY && sy <= maxY) {
+                            state.selectedNodes.push({ pathIdx: pIdx, nodeIdx: nIdx });
+                        }
+                    });
+                });
+
+                state.isMarquee = false;
+                drawCanvas();
+            }
+
+            if (state.isDragging) {
+                pushUndoState();
+                state.isDragging = false;
+            }
+        });
+
+        // Keyboard Shortcuts
+        window.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                if (state.selectedNodes.length > 0) {
+                    pushUndoState();
+                    const g = state.glyphs[state.currentChar];
+                    // Delete in reverse order
+                    state.selectedNodes.sort((a,b) => b.nodeIdx - a.nodeIdx).forEach(s => {
+                        if (g.paths[s.pathIdx]) {
+                            g.paths[s.pathIdx].splice(s.nodeIdx, 1);
+                        }
+                    });
+                    state.selectedNodes = [];
+                    drawCanvas();
+                    renderPreviewText();
+                }
+            } else if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+                e.preventDefault();
+                undo();
+            } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+                e.preventDefault();
+                redo();
+            } else if (e.key === 'v' || e.key === 'V') {
+                setTool('select');
+            } else if (e.key === 'p' || e.key === 'P') {
+                setTool('draw');
+            }
+        });
+
+        // --- UI & GLYPH LIST RENDERING ---
+        function renderGlyphGrid() {
+            glyphGrid.innerHTML = '';
+            const search = document.getElementById('glyph-search').value.toLowerCase();
+            const category = document.getElementById('glyph-category').value;
+
+            let filtered = ALL_CHARS.filter(ch => {
+                if (search && !ch.toLowerCase().includes(search)) return false;
+                if (category === 'latin') return /[A-Za-z0-9]/.test(ch);
+                if (category === 'hiragana') return /[\u3040-\u309F]/.test(ch);
+                if (category === 'symbols') return SYMBOLS_LIST.includes(ch);
+                if (category === 'kanji-g1') return JOY_KANJI_G1.includes(ch);
+                return true;
+            });
+
+            document.getElementById('glyph-count-info').innerText = `${filtered.length} 文字表示中`;
+
+            filtered.forEach(ch => {
+                const btn = document.createElement('button');
+                btn.className = `h-10 rounded-md flex flex-col items-center justify-center font-mono transition text-xs border ${
+                    ch === state.currentChar
+                        ? 'bg-indigo-600 text-white border-indigo-400 font-bold shadow-md'
+                        : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800 hover:border-slate-700'
+                }`;
+                btn.innerText = ch;
+                btn.onclick = () => selectGlyph(ch);
+                glyphGrid.appendChild(btn);
+            });
+        }
+
+        function selectGlyph(ch) {
+            state.currentChar = ch;
+            state.selectedNodes = [];
+            state.activePathIdx = 0;
+            document.getElementById('current-glyph-char').innerText = ch;
+            document.getElementById('current-glyph-unicode').innerText = `U+${ch.charCodeAt(0).toString(16).padStart(4, '0').toUpperCase()}`;
+            
+            updateUIFromState();
+            renderGlyphGrid();
+            drawCanvas();
+        }
+
+        function updateUIFromState() {
+            const g = state.glyphs[state.currentChar] || { scale: 100, vOffset: 0, marginLeft: 50, marginRight: 50 };
+            document.getElementById('glyph-scale').value = g.scale || 100;
+            document.getElementById('glyph-v-offset').value = g.vOffset || 0;
+            document.getElementById('glyph-margin-left').value = g.marginLeft || 50;
+            document.getElementById('glyph-margin-right').value = g.marginRight || 50;
+            document.getElementById('global-ascender').value = state.ascender;
+            document.getElementById('global-descender').value = state.descender;
+        }
+
+        function setTool(t) {
+            state.tool = t;
+            document.getElementById('tool-select').className = t === 'select'
+                ? 'px-3 py-1 rounded text-xs font-medium flex items-center gap-1.5 bg-indigo-600 text-white shadow-sm transition'
+                : 'px-3 py-1 rounded text-xs font-medium flex items-center gap-1.5 text-slate-400 hover:text-slate-200 transition';
+
+            document.getElementById('tool-draw').className = t === 'draw'
+                ? 'px-3 py-1 rounded text-xs font-medium flex items-center gap-1.5 bg-indigo-600 text-white shadow-sm transition'
+                : 'px-3 py-1 rounded text-xs font-medium flex items-center gap-1.5 text-slate-400 hover:text-slate-200 transition';
+        }
+
+        // --- LIVE PREVIEW RENDERER ---
+        function renderPreviewText() {
+            previewRenderArea.innerHTML = '';
+            const text = previewTextElem.value || "Vector Studio 漢字・記号 AI";
+
+            const pCanvas = document.createElement('canvas');
+            pCanvas.height = 70;
+            pCanvas.width = Math.max(300, text.length * 50);
+            const pCtx = pCanvas.getContext('2d');
+
+            let cursorX = 10;
+            const baselineY = 50;
+            const scale = 0.04;
+
+            text.split('').forEach(ch => {
+                const g = state.glyphs[ch] || state.glyphs['A'];
+                if (!g) return;
+
+                const marginLeft = (g.marginLeft !== undefined ? g.marginLeft : 50) * scale;
+                const marginRight = (g.marginRight !== undefined ? g.marginRight : 50) * scale;
+                const glyphScale = (g.scale !== undefined ? g.scale : 100) / 100;
+                const vOffset = (g.vOffset !== undefined ? g.vOffset : 0) * scale;
+
+                cursorX += marginLeft;
+
+                pCtx.beginPath();
+                g.paths.forEach(p => {
+                    p.forEach((pt, idx) => {
+                        const px = cursorX + (pt.x - 500) * scale * glyphScale;
+                        const py = baselineY - (pt.y * scale * glyphScale) - vOffset;
+                        if (idx === 0) pCtx.moveTo(px, py);
+                        else pCtx.lineTo(px, py);
+                    });
+                });
+                pCtx.fillStyle = '#0f172a';
+                pCtx.fill();
+
+                cursorX += (400 * scale * glyphScale) + marginRight;
+            });
+
+            previewRenderArea.appendChild(pCanvas);
+        }
+
+        // --- OPENTYPE.JS FONT EXPORT ---
+        function exportOTFFont() {
+            try {
+                const notdefPath = new opentype.Path();
+                notdefPath.moveTo(100, 0);
+                notdefPath.lineTo(100, 700);
+                notdefPath.lineTo(500, 700);
+                notdefPath.lineTo(500, 0);
+                notdefPath.closePath();
+
+                const notdefGlyph = new opentype.Glyph({
+                    name: '.notdef',
+                    unicode: 0,
+                    advanceWidth: 600,
+                    path: notdefPath
+                });
+
+                const fontGlyphs = [notdefGlyph];
+
+                // Export all registered characters
+                Object.keys(state.glyphs).forEach(ch => {
+                    const gData = state.glyphs[ch];
+                    const path = new opentype.Path();
+
+                    const glyphScale = (gData.scale || 100) / 100;
+                    const vOffset = gData.vOffset || 0;
+                    const marginLeft = gData.marginLeft || 50;
+                    const marginRight = gData.marginRight || 50;
+
+                    gData.paths.forEach(p => {
+                        if (p.length === 0) return;
+                        p.forEach((pt, idx) => {
+                            const x = (pt.x - 500) * glyphScale + 500 + marginLeft;
+                            const y = pt.y * glyphScale + vOffset;
+                            if (idx === 0) path.moveTo(x, y);
+                            else path.lineTo(x, y);
+                        });
+                        path.closePath();
+                    });
+
+                    const advanceWidth = 1000 + marginLeft + marginRight;
+
+                    fontGlyphs.push(new opentype.Glyph({
+                        name: `char_${ch.charCodeAt(0)}`,
+                        unicode: ch.charCodeAt(0),
+                        advanceWidth: advanceWidth,
+                        path: path
+                    }));
+                });
+
+                const font = new opentype.Font({
+                    familyName: 'VectorStudioCustom',
+                    styleName: 'Regular',
+                    unitsPerEm: 1000,
+                    ascender: parseInt(state.ascender),
+                    descender: parseInt(state.descender),
+                    glyphs: fontGlyphs
+                });
+
+                font.download();
+            } catch (err) {
+                console.error('OTF Export Error:', err);
+                alert('フォント書き出し中にエラーが発生しました。パスの形状をご確認ください。');
+            }
+        }
+
+        // --- EVENT BINDINGS & INIT ---
+        document.getElementById('tool-select').onclick = () => setTool('select');
+        document.getElementById('tool-draw').onclick = () => setTool('draw');
+
+        document.getElementById('btn-undo').onclick = undo;
+        document.getElementById('btn-redo').onclick = redo;
+
+        document.getElementById('btn-save-project').onclick = exportProjectJSON;
+        document.getElementById('btn-load-project').onclick = () => document.getElementById('input-file-project').click();
+        document.getElementById('input-file-project').onchange = (e) => {
+            if (e.target.files.length > 0) importProjectJSON(e.target.files[0]);
+        };
+
+        document.getElementById('btn-center-glyph').onclick = () => centerGlyphPaths(state.currentChar);
+        document.getElementById('btn-center-all-symbols').onclick = centerAllSymbols;
+
+        document.getElementById('btn-clear-paths').onclick = () => {
+            pushUndoState();
+            state.glyphs[state.currentChar].paths = [[]];
+            drawCanvas();
+            renderPreviewText();
+        };
+
+        document.getElementById('btn-export-otf').onclick = exportOTFFont;
+
+        // Metric Control Binding
+        ['glyph-scale', 'glyph-v-offset', 'glyph-margin-left', 'glyph-margin-right'].forEach(id => {
+            document.getElementById(id).addEventListener('input', (e) => {
+                const g = state.glyphs[state.currentChar];
+                if (!g) return;
+                if (id === 'glyph-scale') g.scale = parseFloat(e.target.value) || 100;
+                if (id === 'glyph-v-offset') g.vOffset = parseFloat(e.target.value) || 0;
+                if (id === 'glyph-margin-left') g.marginLeft = parseFloat(e.target.value) || 0;
+                if (id === 'glyph-margin-right') g.marginRight = parseFloat(e.target.value) || 0;
+                drawCanvas();
+                renderPreviewText();
+                autoSaveToLocalStorage();
+            });
+        });
+
+        document.getElementById('global-ascender').addEventListener('input', (e) => {
+            state.ascender = parseInt(e.target.value) || 800;
+            drawCanvas();
+        });
+        document.getElementById('global-descender').addEventListener('input', (e) => {
+            state.descender = parseInt(e.target.value) || -200;
+            drawCanvas();
+        });
+
+        document.getElementById('glyph-search').addEventListener('input', renderGlyphGrid);
+        document.getElementById('glyph-category').addEventListener('change', renderGlyphGrid);
+        previewTextElem.addEventListener('input', renderPreviewText);
+
+        // Window Load Initialization
+        window.onload = function() {
+            loadFromLocalStorage();
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();
+            renderGlyphGrid();
+            selectGlyph('A');
+            previewTextElem.value = "Vector Studio 漢字・記号 AI";
+            renderPreviewText();
+        };
+    </script>
 </body>
 </html>
