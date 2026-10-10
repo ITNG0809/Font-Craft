@@ -104,12 +104,12 @@
         <!-- Project Save & Load Controls -->
         <div class="flex gap-2 pt-2 border-t border-slate-800">
           <button id="btnSaveProject" class="flex-1 bg-slate-950 hover:bg-slate-800 text-emerald-300 border border-emerald-800/60 text-xs font-medium py-2 px-3 rounded-lg transition flex items-center justify-center gap-2">
-            <i class="fa-solid fa-floppy-disk text-emerald-400"></i> セーブ (JSON)
+            <i class="fa-solid fa-floppy-disk text-emerald-400"></i> セーブ (.fc)
           </button>
           <button id="btnLoadProject" class="flex-1 bg-slate-950 hover:bg-slate-800 text-indigo-300 border border-indigo-800/60 text-xs font-medium py-2 px-3 rounded-lg transition flex items-center justify-center gap-2">
-            <i class="fa-solid fa-folder-open text-indigo-400"></i> ロード (JSON)
+            <i class="fa-solid fa-folder-open text-indigo-400"></i> ロード (.fc / .json)
           </button>
-          <input type="file" id="projectFileInput" accept=".json" class="hidden">
+          <input type="file" id="projectFileInput" accept=".fc,.json" class="hidden">
         </div>
       </section>
 
@@ -806,13 +806,13 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${fontFamily}_project.json`;
+      a.download = `${fontFamily}_project.fc`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      log(`プロジェクトファイルを保存しました: ${fontFamily}_project.json`);
+      log(`プロジェクトファイルを保存しました: ${fontFamily}_project.fc`);
     });
 
     // Project Load trigger
