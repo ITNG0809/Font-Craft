@@ -8,12 +8,47 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/opentype.js/1.3.4/opentype.min.js"></script>
     <style>
         :root { --primary: #4a90e2; --bg: #f5f7fa; --panel: #ffffff; --border: #ddd; }
-        body { font-family: sans-serif; background: var(--bg); margin: 0; padding: 20px; display: flex; gap: 20px; }
+        body { font-family: sans-serif; background: var(--bg); margin: 0; padding: 20px; display: flex; gap: 20px; height: 100vh; box-sizing: border-box; }
         
         /* サイドバー */
-        .sidebar { width: 280px; background: var(--panel); padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); height: calc(100vh - 40px); overflow-y: auto; flex-shrink: 0; box-sizing: border-box; }
-        .main { flex-grow: 1; background: var(--panel); padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); height: calc(100vh - 40px); overflow-y: auto; display: flex; flex-direction: column; box-sizing: border-box; }
+        .sidebar { width: 280px; background: var(--panel); padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); height: 100%; overflow-y: auto; flex-shrink: 0; box-sizing: border-box; }
+        .main { flex-grow: 1; display: flex; flex-direction: column; gap: 15px; height: 100%; box-sizing: border-box; min-width: 0; }
         
+        /* メイン上部 (プレビューと検索) */
+        .top-panel { background: var(--panel); padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); flex-shrink: 0; }
+        .preview-area { display: flex; gap: 10px; margin-bottom: 10px; }
+        .preview-area input[type="text"] { flex-grow: 1; padding: 10px; font-size: 24px; border: 1px solid var(--border); border-radius: 4px; }
+        
+        .search-bar { display: flex; gap: 10px; align-items: center; background: #f8f9fa; padding: 10px; border-radius: 6px; border: 1px solid var(--border); }
+        .search-bar input { flex-grow: 1; padding: 6px; font-size: 14px; }
+        
+        /* グリフ一覧 */
+        .glyph-container { background: var(--panel); padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); flex-grow: 1; overflow-y: auto; }
+        .glyph-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+        .glyph-card { border: 1px solid var(--border); padding: 8px; border-radius: 6px; background: #fafafa; position: relative; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .glyph-card img { max-width: 100%; height: 40px; object-fit: contain; display: block; margin: 0 auto 8px; background: #ccc; background-image: linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%, #eee), linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%, #eee); background-size: 16px 16px; background-position: 0 0, 8px 8px; }
+        
+        .glyph-header { display: flex; gap: 4px; margin-bottom: 8px; align-items: center; }
+        .glyph-header input { flex-grow: 1; font-size: 13px; text-align: center; padding: 2px; }
+        .glyph-header span { font-size: 9px; color: #666; min-width: 42px; text-align: right; }
+        
+        .glyph-settings { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+        .glyph-settings div { display: flex; flex-direction: column; }
+        .glyph-settings label { font-size: 9px; margin-bottom: 1px; color: #444; }
+        .glyph-settings input, .glyph-settings select { padding: 2px 4px; font-size: 10px; height: 22px; }
+        
+        .remove-btn { position: absolute; top: 4px; right: 4px; background: #e74c3c; width: 18px; height: 18px; padding: 0; line-height: 16px; text-align: center; border-radius: 50%; font-size: 10px; color: white; cursor: pointer; border: none; }
+        .remove-btn:hover { background: #c0392b; }
+
+        /* ログパネル */
+        .log-panel { background: #333; color: #0f0; padding: 10px; border-radius: 8px; height: 120px; overflow-y: auto; flex-shrink: 0; font-family: monospace; font-size: 11px; }
+        .log-panel h3 { color: #fff; font-size: 12px; margin: 0 0 5px 0; border-bottom: 1px solid #555; padding-bottom: 3px; }
+        .log-list { list-style: none; padding: 0; margin: 0; }
+        .log-list li { margin-bottom: 3px; border-bottom: 1px dashed #444; padding-bottom: 2px; }
+        .log-warn { color: #f39c12; }
+        .log-err { color: #e74c3c; }
+
+        /* 共通フォーム */
         h1, h2, h3 { font-size: 15px; margin-top: 0; border-bottom: 2px solid var(--primary); padding-bottom: 5px; margin-bottom: 10px; }
         .form-group { margin-bottom: 12px; }
         label { display: block; font-size: 11px; margin-bottom: 3px; font-weight: bold; }
@@ -23,29 +58,8 @@
         button:hover { background: #357abd; }
         .btn-secondary { background: #6c757d; }
         .btn-secondary:hover { background: #5a6268; }
-        
-        /* 検索バー */
-        .search-bar { display: flex; gap: 10px; margin-bottom: 15px; align-items: center; background: #f8f9fa; padding: 10px; border-radius: 6px; border: 1px solid var(--border); }
-        .search-bar input { flex-grow: 1; padding: 8px; font-size: 14px; }
-        
-        /* グリフ一覧（カードをコンパクトに） */
-        .glyph-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; overflow-y: auto; padding-right: 5px; }
-        .glyph-card { border: 1px solid var(--border); padding: 8px; border-radius: 6px; background: #fafafa; position: relative; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .glyph-card img { max-width: 100%; height: 40px; object-fit: contain; display: block; margin: 0 auto 8px; background: #ccc; background-image: linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%, #eee), linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%, #eee); background-size: 16px 16px; background-position: 0 0, 8px 8px; }
-        
-        .glyph-header { display: flex; gap: 4px; margin-bottom: 8px; align-items: center; }
-        .glyph-header input { flex-grow: 1; font-size: 13px; text-align: center; padding: 2px; }
-        .glyph-header span { font-size: 9px; color: #666; min-width: 42px; text-align: right; }
-        
-        /* 設定項目（小さく・詰めて表示） */
-        .glyph-settings { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
-        .glyph-settings div { display: flex; flex-direction: column; }
-        .glyph-settings label { font-size: 9px; margin-bottom: 1px; color: #444; }
-        .glyph-settings input, .glyph-settings select { padding: 2px 4px; font-size: 10px; height: 22px; }
-        
-        /* 削除ボタン */
-        .remove-btn { position: absolute; top: 4px; right: 4px; background: #e74c3c; width: 18px; height: 18px; padding: 0; line-height: 16px; text-align: center; border-radius: 50%; font-size: 10px; margin: 0; }
-        .remove-btn:hover { background: #c0392b; }
+        .btn-preview { background: #27ae60; }
+        .btn-preview:hover { background: #219150; }
     </style>
 </head>
 <body>
@@ -53,8 +67,8 @@
 <div class="sidebar">
     <h2>1. 読み込み / 保存</h2>
     <div class="form-group">
-        <label>ZIPファイルを選択 (PNG/SVG)</label>
-        <input type="file" id="fileZip" accept=".zip">
+        <label>ZIP / .sprite3 ファイルを選択</label>
+        <input type="file" id="fileZip" accept=".zip,.sprite3">
     </div>
     <div class="form-group">
         <label>画像を追加 (複数可)</label>
@@ -97,11 +111,28 @@
 </div>
 
 <div class="main">
-    <div class="search-bar">
-        <span style="font-weight: bold; font-size: 14px;">読み込まれた文字 (<span id="glyphCount">0</span>件)</span>
-        <input type="text" id="searchInput" placeholder="文字やUnicodeで検索... (例: あ, U+3042)">
+    <!-- 上部：プレビュー＆検索 -->
+    <div class="top-panel">
+        <div class="preview-area">
+            <input type="text" id="previewInput" placeholder="ここに文字を打ってテストできます（右のボタンで更新）">
+            <button id="btnPreview" class="btn-preview" style="width:120px; margin:0;">プレビュー更新</button>
+        </div>
+        <div class="search-bar">
+            <span style="font-weight: bold; font-size: 14px;">読み込まれた文字 (<span id="glyphCount">0</span>件)</span>
+            <input type="text" id="searchInput" placeholder="文字やUnicodeで検索... (例: あ, U+3042)">
+        </div>
     </div>
-    <div id="glyphGrid" class="glyph-grid"></div>
+
+    <!-- 中部：グリフ一覧 -->
+    <div class="glyph-container">
+        <div id="glyphGrid" class="glyph-grid"></div>
+    </div>
+
+    <!-- 下部：ログ -->
+    <div class="log-panel">
+        <h3>操作ログ</h3>
+        <ul id="logList" class="log-list"></ul>
+    </div>
 </div>
 
 <script>
@@ -109,7 +140,17 @@
 let glyphs = [];
 let puaCounter = 0xE000;
 
-// --- ユーティリティ ---
+// --- ユーティリティ・ログ ---
+const addLog = (msg, type = "info") => {
+    const ul = document.getElementById('logList');
+    const li = document.createElement('li');
+    const time = new Date().toLocaleTimeString();
+    li.textContent = `[${time}] ${msg}`;
+    if (type === "warn") li.className = "log-warn";
+    if (type === "err") li.className = "log-err";
+    ul.prepend(li);
+};
+
 const escapeHTML = (str) => String(str).replace(/[&<>"']/g, match => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[match]);
 
 const getUnicodeHex = (char) => {
@@ -128,13 +169,8 @@ const getBase64FromUrl = async (url) => {
 };
 
 // --- 画像読み込み処理 ---
-const processImageFile = async (filename, blob) => {
-    let charName = filename.replace(/\.[^/.]+$/, "");
-    if (charName.includes('/')) charName = charName.split('/').pop();
-
-    if (Array.from(charName).length > 1) {
-        console.warn(`複数文字のファイル名です: ${charName}`);
-    }
+const processImageFile = async (charNameInput, blob, originalFilename) => {
+    let charName = charNameInput;
 
     const charStr = Array.from(charName)[0] || "";
     let unicodeVal = charStr.codePointAt(0);
@@ -177,6 +213,7 @@ const processImageFile = async (filename, blob) => {
     };
 
     glyphs.push(glyphObj);
+    addLog(`画像 "${originalFilename}" を文字「${charStr}」として取り込みました`);
 };
 
 // --- UI描画 (検索機能連動) ---
@@ -186,7 +223,6 @@ const renderGlyphs = () => {
     
     const searchStr = document.getElementById('searchInput').value.toLowerCase();
     
-    // 検索フィルタリング
     const filteredGlyphs = glyphs.filter(g => {
         if (!searchStr) return true;
         const hex = getUnicodeHex(String.fromCodePoint(g.unicode)).toLowerCase();
@@ -213,17 +249,17 @@ const renderGlyphs = () => {
                 <div>
                     <label>垂直位置</label>
                     <select onchange="updateGlyphProp('${g.id}', 'vAlign', this.value)">
-                        <option value="top" ${g.vAlign==='top'?'selected':''}>上揃え</option>
-                        <option value="center" ${g.vAlign==='center'?'selected':''}>中央</option>
-                        <option value="bottom" ${g.vAlign==='bottom'?'selected':''}>下揃え</option>
+                        <option value="top" ${g.vAlign==='top'?'selected':''}>上</option>
+                        <option value="center" ${g.vAlign==='center'?'selected':''}>中</option>
+                        <option value="bottom" ${g.vAlign==='bottom'?'selected':''}>下</option>
                     </select>
                 </div>
                 <div>
-                    <label>左余白(px)</label>
+                    <label>左余白</label>
                     <input type="number" value="${g.leftMargin}" onchange="updateGlyphProp('${g.id}', 'leftMargin', this.value)">
                 </div>
                 <div>
-                    <label>右余白(px)</label>
+                    <label>右余白</label>
                     <input type="number" value="${g.rightMargin}" onchange="updateGlyphProp('${g.id}', 'rightMargin', this.value)">
                 </div>
                 <div>
@@ -242,6 +278,8 @@ const renderGlyphs = () => {
 
 // --- イベントハンドラ用グローバル関数 ---
 window.removeGlyph = (id) => {
+    const g = glyphs.find(g => g.id === id);
+    if(g) addLog(`文字「${g.char}」を削除しました`);
     glyphs = glyphs.filter(g => g.id !== id);
     renderGlyphs();
 };
@@ -249,6 +287,7 @@ window.removeGlyph = (id) => {
 window.updateGlyphChar = (id, newChar) => {
     const g = glyphs.find(g => g.id === id);
     if (g && newChar) {
+        addLog(`文字「${g.char}」を「${newChar}」に変更しました`);
         g.char = newChar;
         g.unicode = newChar.codePointAt(0);
         renderGlyphs();
@@ -259,34 +298,79 @@ window.updateGlyphProp = (id, prop, value) => {
     const g = glyphs.find(g => g.id === id);
     if (g) {
         g[prop] = prop === 'vAlign' || prop === 'hAlign' ? value : Number(value);
+        addLog(`文字「${g.char}」の ${prop} を ${value} に変更しました`);
     }
 };
 
 // --- 初期化とイベントリスナー ---
 document.addEventListener('DOMContentLoaded', () => {
     
-    // 検索入力時のリアルタイム絞り込み
     document.getElementById('searchInput').addEventListener('input', renderGlyphs);
 
-    // ZIP読み込み
+    // ZIP / .sprite3 読み込み
     document.getElementById('fileZip').addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        document.getElementById('status').innerText = "ZIP展開中...";
+        
+        addLog(`ファイル "${file.name}" の読み込みを開始しました`);
+        document.getElementById('status').innerText = "展開中...";
         
         try {
             const zip = await JSZip.loadAsync(file);
+            let spriteMap = {};
+            
+            // sprite3の場合、JSONから暗号化(ハッシュ)名を元に戻す準備
+            if (file.name.endsWith('.sprite3')) {
+                const jsonFile = zip.file("sprite.json") || zip.file("project.json");
+                if (jsonFile) {
+                    const jsonTxt = await jsonFile.async("text");
+                    const data = JSON.parse(jsonTxt);
+                    // Scratchのスプライト・コスチューム解析
+                    if (data.costumes) {
+                        data.costumes.forEach(c => { spriteMap[c.md5ext] = c.name; });
+                    } else if (data.targets) { // sb3互換の場合
+                        data.targets.forEach(t => {
+                            t.costumes.forEach(c => { spriteMap[c.md5ext] = c.name; });
+                        });
+                    }
+                    addLog("sprite3内のJSONを解析し、暗号ファイル名のマッピングを復元（削除）しました");
+                }
+            }
+
             for (const [filename, fileData] of Object.entries(zip.files)) {
                 if (!fileData.dir && filename.match(/\.(png|svg)$/i)) {
+                    let charName = filename.replace(/\.[^/.]+$/, "");
+                    if (charName.includes('/')) charName = charName.split('/').pop();
+                    
+                    // .sprite3 コスチューム復元ロジック
+                    if (file.name.endsWith('.sprite3')) {
+                        const originalName = spriteMap[filename];
+                        if (originalName) {
+                            if (Array.from(originalName).length >= 2) {
+                                addLog(`コスチューム "${originalName}" (${filename}) は2文字以上のため読み込みをスキップしました`, "warn");
+                                continue;
+                            }
+                            charName = originalName;
+                        }
+                    } else {
+                        // 通常のZIPで複数文字の場合
+                        if (Array.from(charName).length >= 2) {
+                            addLog(`ファイル名 "${charName}" は2文字以上のためスキップしました`, "warn");
+                            continue;
+                        }
+                    }
+
                     const blob = await fileData.async('blob');
-                    await processImageFile(filename, blob);
+                    await processImageFile(charName, blob, filename);
                 }
             }
             renderGlyphs();
-            document.getElementById('status').innerText = "ZIP読み込み完了";
+            addLog(`ファイル "${file.name}" の処理が完了しました`);
+            document.getElementById('status').innerText = "読み込み完了";
         } catch (err) {
             console.error(err);
-            document.getElementById('status').innerText = "ZIP読み込みエラー";
+            addLog(`読み込みエラー: ${err.message}`, "err");
+            document.getElementById('status').innerText = "エラー発生";
         }
         e.target.value = "";
     });
@@ -295,28 +379,30 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('fileImage').addEventListener('change', async (e) => {
         const files = e.target.files;
         if (!files.length) return;
-        document.getElementById('status').innerText = "画像読み込み中...";
+        addLog(`${files.length} 件の個別画像を追加します`);
         
         try {
             for (let file of files) {
-                await processImageFile(file.name, file);
+                let charName = file.name.replace(/\.[^/.]+$/, "");
+                if (Array.from(charName).length >= 2) {
+                    addLog(`画像 "${file.name}" は名前が2文字以上のためスキップしました`, "warn");
+                    continue;
+                }
+                await processImageFile(charName, file, file.name);
             }
             renderGlyphs();
             document.getElementById('status').innerText = "画像追加完了";
         } catch (err) {
             console.error(err);
-            document.getElementById('status').innerText = "画像読み込みエラー";
+            addLog(`画像追加エラー: ${err.message}`, "err");
         }
         e.target.value = "";
     });
 
-    // プロジェクト保存 (.fc)
+    // プロジェクト保存
     document.getElementById('btnSave').addEventListener('click', async () => {
-        if (glyphs.length === 0) {
-            alert("保存する文字がありません。");
-            return;
-        }
-        document.getElementById('status').innerText = "プロジェクト保存中...";
+        if (glyphs.length === 0) return alert("保存する文字がありません。");
+        addLog("プロジェクトを保存しています...");
         
         try {
             const saveGlyphs = await Promise.all(glyphs.map(async (g) => {
@@ -334,22 +420,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const blob = new Blob([JSON.stringify(projectData)], { type: "application/json" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
+            const dlName = `${projectData.fontName || 'font'}_project.fc`;
             a.href = url;
-            a.download = `${projectData.fontName || 'font'}_project.fc`;
+            a.download = dlName;
             a.click();
             URL.revokeObjectURL(url);
-            document.getElementById('status').innerText = "保存完了 (.fc)";
+            addLog(`プロジェクト "${dlName}" を保存しました`);
         } catch (err) {
-            console.error(err);
-            document.getElementById('status').innerText = "保存エラー";
+            addLog(`保存エラー: ${err.message}`, "err");
         }
     });
 
-    // プロジェクト読込 (.fc / .json)
+    // プロジェクト読込
     document.getElementById('fileLoad').addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        document.getElementById('status').innerText = "プロジェクト読み込み中...";
+        addLog(`プロジェクト "${file.name}" を読み込んでいます...`);
         
         const reader = new FileReader();
         reader.onload = async (event) => {
@@ -365,30 +451,25 @@ document.addEventListener('DOMContentLoaded', () => {
                         const mimeString = g.originalUrl.split(',')[0].split(':')[1].split(';')[0];
                         const ab = new ArrayBuffer(byteString.length);
                         const ia = new Uint8Array(ab);
-                        for (let i = 0; i < byteString.length; i++) {
-                            ia[i] = byteString.charCodeAt(i);
-                        }
+                        for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
                         const blob = new Blob([ab], {type: mimeString});
                         g.originalUrl = URL.createObjectURL(blob);
                     }
                     return g;
                 });
                 
-                // 検索バーをリセット
                 document.getElementById('searchInput').value = "";
                 renderGlyphs();
-                document.getElementById('status').innerText = "プロジェクト読み込み完了";
+                addLog(`プロジェクト "${file.name}" の復元が完了しました`);
             } catch (err) {
-                console.error(err);
-                alert("ファイルの形式が正しくありません。");
-                document.getElementById('status').innerText = "読み込みエラー";
+                addLog(`プロジェクト読み込みエラー: ${err.message}`, "err");
             }
         };
         reader.readAsText(file);
         e.target.value = "";
     });
 
-    // パス生成
+    // パス生成エンジン
     const imageToPath = (img, gProps, unitsPerPixel) => {
         const canvas = document.createElement('canvas');
         canvas.width = img.width;
@@ -420,12 +501,9 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let y = 0; y < img.height; y++) {
             for (let x = 0; x < img.width; x++) {
                 const idx = (y * img.width + x) * 4;
-                const alpha = imgData[idx + 3];
-                
-                if (alpha > 128) {
+                if (imgData[idx + 3] > 128) {
                     const px = startX + x * pixelSize;
                     const py = startY - y * pixelSize;
-
                     path.moveTo(px, py);
                     path.lineTo(px + pixelSize, py);
                     path.lineTo(px + pixelSize, py - pixelSize);
@@ -437,73 +515,93 @@ document.addEventListener('DOMContentLoaded', () => {
         return path;
     };
 
-    // フォント生成処理
-    document.getElementById('btnGenerate').addEventListener('click', async () => {
-        if (glyphs.length === 0) {
-            alert("生成する文字がありません。");
-            return;
-        }
-        document.getElementById('status').innerText = "フォント生成中...";
+    // フォントビルド（内部共通関数）
+    const buildFontObject = async () => {
+        const fontName = document.getElementById('fontName').value || "MyPixelFont";
+        const gAscender = parseInt(document.getElementById('globalAscender').value) || 16;
+        const gDescender = parseInt(document.getElementById('globalDescender').value) || -4;
         
+        const unitsPerEm = 1000;
+        const totalHeightPx = gAscender - gDescender;
+        const unitsPerPixel = Math.round(unitsPerEm / totalHeightPx);
+
+        const opentypeGlyphs = [];
+        opentypeGlyphs.push(new opentype.Glyph({ name: '.notdef', unicode: 0, advanceWidth: 500, path: new opentype.Path() }));
+
+        for (const g of glyphs) {
+            const img = new Image();
+            img.src = g.originalUrl;
+            await new Promise(r => img.onload = r);
+
+            const path = imageToPath(img, g, unitsPerPixel);
+            const scale = (g.scale || 100) / 100;
+            const widthPx = (g.leftMargin || 0) + (img.width * scale) + (g.rightMargin || 0);
+            
+            opentypeGlyphs.push(new opentype.Glyph({
+                name: g.char,
+                unicode: g.unicode,
+                advanceWidth: Math.round(widthPx * unitsPerPixel),
+                path: path
+            }));
+        }
+
+        return new opentype.Font({
+            familyName: fontName,
+            styleName: 'Regular',
+            unitsPerEm: unitsPerEm,
+            ascender: gAscender * unitsPerPixel,
+            descender: gDescender * unitsPerPixel,
+            glyphs: opentypeGlyphs
+        });
+    };
+
+    // プレビュー機能
+    document.getElementById('btnPreview').addEventListener('click', async () => {
+        if (glyphs.length === 0) return alert("文字がありません。");
+        addLog("プレビュー用フォントを構築中...");
         try {
-            const fontName = document.getElementById('fontName').value || "MyPixelFont";
-            const gAscender = parseInt(document.getElementById('globalAscender').value) || 16;
-            const gDescender = parseInt(document.getElementById('globalDescender').value) || -4;
+            const font = await buildFontObject();
+            const buffer = font.toArrayBuffer();
+            const blob = new Blob([buffer], { type: "font/ttf" });
+            const url = URL.createObjectURL(blob);
             
-            const unitsPerEm = 1000;
-            const totalHeightPx = gAscender - gDescender;
-            const unitsPerPixel = Math.round(unitsPerEm / totalHeightPx);
-
-            const opentypeGlyphs = [];
-            
-            const notdefGlyph = new opentype.Glyph({
-                name: '.notdef',
-                unicode: 0,
-                advanceWidth: 500,
-                path: new opentype.Path()
-            });
-            opentypeGlyphs.push(notdefGlyph);
-
-            for (const g of glyphs) {
-                const img = new Image();
-                img.src = g.originalUrl;
-                await new Promise(r => img.onload = r);
-
-                const path = imageToPath(img, g, unitsPerPixel);
-                
-                const scale = (g.scale || 100) / 100;
-                const widthPx = (g.leftMargin || 0) + (img.width * scale) + (g.rightMargin || 0);
-                const advanceWidth = Math.round(widthPx * unitsPerPixel);
-
-                const otGlyph = new opentype.Glyph({
-                    name: g.char,
-                    unicode: g.unicode,
-                    advanceWidth: advanceWidth,
-                    path: path
-                });
-                opentypeGlyphs.push(otGlyph);
+            let style = document.getElementById('previewStyle');
+            if(!style) {
+                style = document.createElement('style');
+                style.id = 'previewStyle';
+                document.head.appendChild(style);
             }
-
-            const font = new opentype.Font({
-                familyName: fontName,
-                styleName: 'Regular',
-                unitsPerEm: unitsPerEm,
-                ascender: gAscender * unitsPerPixel,
-                descender: gDescender * unitsPerPixel,
-                glyphs: opentypeGlyphs
-            });
-
-            const isOtf = document.getElementById('exportFormat').value === 'otf';
-            font.download(fontName + (isOtf ? '.otf' : '.ttf'));
-            document.getElementById('status').innerText = "生成・ダウンロード完了！";
-
+            // キャッシュ回避のためランダムなフォント名
+            const familyName = 'PreviewFont_' + Date.now();
+            style.textContent = `@font-face { font-family: '${familyName}'; src: url('${url}') format('truetype'); } #previewInput { font-family: '${familyName}', sans-serif; }`;
+            
+            addLog("プレビューを更新しました。上の入力欄でテストできます。");
         } catch (err) {
-            console.error(err);
-            document.getElementById('status').innerText = "生成エラーが発生しました。コンソールを確認してください。";
-            alert("エラーが発生しました: " + err.message);
+            addLog(`プレビュー構築エラー: ${err.message}`, "err");
         }
     });
 
+    // 最終出力生成
+    document.getElementById('btnGenerate').addEventListener('click', async () => {
+        if (glyphs.length === 0) return alert("生成する文字がありません。");
+        addLog("最終フォントデータを生成しています...");
+        document.getElementById('status').innerText = "フォント生成中...";
+        
+        try {
+            const font = await buildFontObject();
+            const isOtf = document.getElementById('exportFormat').value === 'otf';
+            const fontName = document.getElementById('fontName').value || "MyPixelFont";
+            const filename = fontName + (isOtf ? '.otf' : '.ttf');
+            
+            font.download(filename);
+            document.getElementById('status').innerText = "完了！";
+            addLog(`フォント "${filename}" を生成・ダウンロードしました`);
+        } catch (err) {
+            console.error(err);
+            document.getElementById('status').innerText = "生成エラー";
+            addLog(`フォント生成エラー: ${err.message}`, "err");
+        }
+    });
 });
 </script>
 </body>
