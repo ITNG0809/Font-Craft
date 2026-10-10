@@ -336,19 +336,28 @@ document.addEventListener('DOMContentLoaded', () => {
             const zip = await JSZip.loadAsync(file);
             let spriteMap = {};
             
+            // sprite.json からコスチューム名を解読（^などの記号対応）
             if (file.name.endsWith('.sprite3')) {
                 const jsonFile = zip.file("sprite.json") || zip.file("project.json");
                 if (jsonFile) {
                     const jsonTxt = await jsonFile.async("text");
                     const data = JSON.parse(jsonTxt);
+                    
+                    const registerCostumes = (costumes) => {
+                        costumes.forEach(c => {
+                            if (c.md5ext) spriteMap[c.md5ext] = c.name;
+                            if (c.assetId) spriteMap[`${c.assetId}.${c.dataFormat}`] = c.name;
+                        });
+                    };
+
                     if (data.costumes) {
-                        data.costumes.forEach(c => { spriteMap[c.md5ext] = c.name; });
+                        registerCostumes(data.costumes);
                     } else if (data.targets) { 
                         data.targets.forEach(t => {
-                            t.costumes.forEach(c => { spriteMap[c.md5ext] = c.name; });
+                            if (t.costumes) registerCostumes(t.costumes);
                         });
                     }
-                    addLog("sprite3内のJSONを解析し、暗号ファイル名のマッピングを復元（削除）しました");
+                    addLog("sprite3内のJSONを解析し、暗号ファイル名のマッピングを復元しました");
                 }
             }
 
@@ -358,15 +367,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (charName.includes('/')) charName = charName.split('/').pop();
                     
                     if (file.name.endsWith('.sprite3')) {
-                        const originalName = spriteMap[filename];
+                        const originalName = spriteMap[filename] || spriteMap[charName];
                         if (originalName) {
+                            // 解読成功時：2文字以上の場合はスキップ
                             if (Array.from(originalName).length >= 2) {
                                 addLog(`コスチューム "${originalName}" (${filename}) は2文字以上のため読み込みをスキップしました`, "warn");
                                 continue;
                             }
                             charName = originalName;
+                        } else {
+                            // 解読失敗時：スキップせずにそのまま暗号や数字のまま読み込む
+                            addLog(`ファイル "${filename}" の対応名が見つからないため、そのまま読み込みます`, "warn");
+                            // ※この場合、charNameの最初の1文字だけが文字として割り当てられますが、UI上で手動変更可能です。
                         }
                     } else {
+                        // 通常ZIPの場合
                         if (Array.from(charName).length >= 2) {
                             addLog(`ファイル名 "${charName}" は2文字以上のためスキップしました`, "warn");
                             continue;
