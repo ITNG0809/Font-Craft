@@ -36,6 +36,8 @@
         
         input[type="text"], input[type="number"], select { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; }
         input[type="file"] { font-size: 12px; width: 100%; padding: 5px 0; }
+        input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
+        
         button { background: var(--primary); color: white; border: none; padding: 12px; width: 100%; border-radius: 4px; cursor: pointer; margin-bottom: 8px; font-weight: bold; font-size: 14px; }
         button:hover { background: #357abd; }
         
@@ -52,7 +54,7 @@
         
         .glyph-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
         .glyph-card { border: 1px solid var(--border); padding: 8px; border-radius: 6px; background: #fafafa; position: relative; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .glyph-card.multi-char { border-color: #f39c12; background: #fffdf5; } /* 複数文字は少し色を変えて分かりやすく */
+        .glyph-card.multi-char { border-color: #f39c12; background: #fffdf5; }
         .glyph-card img { max-width: 100%; height: 40px; object-fit: contain; display: block; margin: 0 auto 8px; background: #ccc; background-image: linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%, #eee), linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%, #eee); background-size: 16px 16px; background-position: 0 0, 8px 8px; }
         
         .glyph-header { display: flex; gap: 4px; margin-bottom: 8px; align-items: center; }
@@ -110,6 +112,10 @@
     <div class="form-group">
         <label>Descender (負の数)</label>
         <input type="number" id="globalDescender" value="-4">
+    </div>
+    <div class="form-group" style="display: flex; align-items: center; gap: 8px;">
+        <input type="checkbox" id="globalGap" checked>
+        <label for="globalGap" style="margin: 0; font-size: 13px; cursor: pointer;">文字間に1マスの隙間を空ける</label>
     </div>
     
     <h2 style="margin-top:20px;">3. 出力</h2>
@@ -175,11 +181,9 @@ const getBase64FromUrl = async (url) => {
 
 const processImageFile = async (charNameInput, blob, originalFilename) => {
     let charName = charNameInput;
-    // 最初の1文字目をUnicode基準にする
     const firstCharStr = Array.from(charName)[0] || "";
     let unicodeVal = firstCharStr ? firstCharStr.codePointAt(0) : puaCounter++;
     
-    // すでに同じ文字が存在する場合はPUA（外字）領域を割り当てて競合回避
     const isDuplicate = glyphs.some(g => g.unicode === unicodeVal && g.char === charName);
     if (isDuplicate || !firstCharStr) unicodeVal = puaCounter++;
 
@@ -194,7 +198,7 @@ const processImageFile = async (charNameInput, blob, originalFilename) => {
 
     glyphs.push({
         id: Date.now() + Math.random().toString(16),
-        char: charName, // 複数文字の名前をそのまま保存
+        char: charName, 
         unicode: unicodeVal, originalUrl: url,
         width: img.width, height: img.height,
         scale: 100, leftMargin: 0, rightMargin: 0, vOffset: 0,
@@ -216,20 +220,17 @@ const renderGlyphs = () => {
     
     let filteredGlyphs = glyphs.filter(g => {
         if (!searchStr) return true;
-        // 「複数文字」と検索されたら、文字数が2文字以上のものだけを返す
         if (searchStr === "複数文字") return Array.from(g.char).length >= 2;
-        
         const hex = getUnicodeHex(String.fromCodePoint(g.unicode)).toLowerCase();
         return g.char.toLowerCase().includes(searchStr) || hex.includes(searchStr);
     });
 
-    // 2文字以上のものを一番下にするための並び替え（ソート）
     filteredGlyphs.sort((a, b) => {
         const aIsMulti = Array.from(a.char).length >= 2;
         const bIsMulti = Array.from(b.char).length >= 2;
-        if (aIsMulti && !bIsMulti) return 1;  // aが複数文字なら後ろへ
-        if (!aIsMulti && bIsMulti) return -1; // bが複数文字ならbを後ろへ
-        return 0; // それ以外はそのまま
+        if (aIsMulti && !bIsMulti) return 1;
+        if (!aIsMulti && bIsMulti) return -1;
+        return 0;
     });
 
     document.getElementById('glyphCount').innerText = `${filteredGlyphs.length} / ${glyphs.length}`;
@@ -337,7 +338,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (isScratch) {
                         const originalName = spriteMap[filename] || spriteMap[charName];
                         if (originalName) {
-                            // 複数文字スキップ処理を削除しました
                             charName = originalName;
                         } else {
                             addLog(`"${filename}" の対応名が見つからないためそのまま読み込みます`, "warn");
@@ -364,14 +364,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!files.length) return;
         for (let file of files) {
             let charName = file.name.replace(/\.[^/.]+$/, "");
-            // 複数文字スキップ処理を削除しました
             await processImageFile(charName, file, file.name);
         }
         renderGlyphs();
         e.target.value = "";
     });
 
-    // --- 以降、セーブやフォント生成の処理は以前と同じ ---
     document.getElementById('btnSave').addEventListener('click', async () => {
         if (glyphs.length === 0) return alert("保存する文字がありません");
         try {
@@ -383,6 +381,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 fontName: document.getElementById('fontName').value,
                 globalAscender: document.getElementById('globalAscender').value,
                 globalDescender: document.getElementById('globalDescender').value,
+                globalGap: document.getElementById('globalGap').checked, // 隙間設定を保存
                 glyphs: saveGlyphs
             };
             const blob = new Blob([JSON.stringify(projectData)], { type: "application/json" });
@@ -404,6 +403,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('fontName').value = data.fontName || "MyPixelFont";
                 document.getElementById('globalAscender').value = data.globalAscender || 16;
                 document.getElementById('globalDescender').value = data.globalDescender || -4;
+                // 古いセーブデータ対応（無い場合はtrueにする）
+                document.getElementById('globalGap').checked = data.globalGap !== false; 
+                
                 glyphs = data.glyphs.map(g => {
                     if (g.originalUrl.startsWith('data:')) {
                         const byteString = atob(g.originalUrl.split(',')[1]);
@@ -455,6 +457,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const fontName = document.getElementById('fontName').value || "MyPixelFont";
         const gAsc = parseInt(document.getElementById('globalAscender').value) || 16;
         const gDesc = parseInt(document.getElementById('globalDescender').value) || -4;
+        const isGapEnabled = document.getElementById('globalGap').checked; // チェック状態を取得
+        const gapPx = isGapEnabled ? 1 : 0; // チェックされていれば1マス（1px）分の隙間を確保
+        
         const unitsPerPixel = Math.round(1000 / (gAsc - gDesc));
         const opentypeGlyphs = [new opentype.Glyph({ name: '.notdef', unicode: 0, advanceWidth: 500, path: new opentype.Path() })];
 
@@ -462,7 +467,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const img = new Image(); img.src = g.originalUrl;
             await new Promise(r => img.onload = r);
             const path = imageToPath(img, g, unitsPerPixel);
-            const widthPx = (g.leftMargin || 0) + (img.width * ((g.scale||100)/100)) + (g.rightMargin || 0);
+            
+            // 文字幅（右の余白 + gapPx を追加）
+            const widthPx = (g.leftMargin || 0) + (img.width * ((g.scale||100)/100)) + (g.rightMargin || 0) + gapPx;
+            
             opentypeGlyphs.push(new opentype.Glyph({ name: Array.from(g.char)[0] || '.notdef', unicode: g.unicode, advanceWidth: Math.round(widthPx * unitsPerPixel), path: path }));
         }
         return new opentype.Font({ familyName: fontName, styleName: 'Regular', unitsPerEm: 1000, ascender: gAsc * unitsPerPixel, descender: gDesc * unitsPerPixel, glyphs: opentypeGlyphs });
