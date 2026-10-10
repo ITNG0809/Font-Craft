@@ -9,49 +9,18 @@
     <style>
         :root { --primary: #4a90e2; --bg: #f5f7fa; --panel: #ffffff; --border: #ddd; }
         
-        /* 全体レイアウト（スマホ標準：はみ出し防止のため自然なブロック配置） */
         body { 
             font-family: sans-serif; 
             background: var(--bg); 
             margin: 0; 
-            /* ノッチ（カメラ穴）などの干渉を防ぐ安全余白 */
             padding: max(15px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(15px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
             box-sizing: border-box; 
         }
         
-        .sidebar { 
-            background: var(--panel); 
-            padding: 15px; 
-            border-radius: 8px; 
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
-            width: 100%; 
-            box-sizing: border-box; 
-            margin-bottom: 15px; /* メインとの間隔 */
-        }
+        .sidebar { background: var(--panel); padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); width: 100%; box-sizing: border-box; margin-bottom: 15px; }
+        .main { background: var(--panel); padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); width: 100%; box-sizing: border-box; }
+        .log-panel { background: #333; color: #0f0; padding: 10px; border-radius: 8px; height: 120px; overflow-y: auto; font-family: monospace; font-size: 12px; margin-top: 15px; }
         
-        .main { 
-            background: var(--panel); 
-            padding: 15px; 
-            border-radius: 8px; 
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
-            width: 100%;
-            box-sizing: border-box; 
-        }
-
-        /* ログパネル（スマホでも見やすく） */
-        .log-panel { 
-            background: #333; 
-            color: #0f0; 
-            padding: 10px; 
-            border-radius: 8px; 
-            height: 120px; 
-            overflow-y: auto; 
-            font-family: monospace; 
-            font-size: 12px; 
-            margin-top: 15px;
-        }
-        
-        /* PC向けレイアウト (画面幅768px以上) */
         @media (min-width: 768px) {
             body { display: flex; flex-direction: row; gap: 15px; padding: 20px; height: 100vh; overflow: hidden; }
             .sidebar { width: 300px; height: 100%; overflow-y: auto; margin-bottom: 0; flex-shrink: 0; }
@@ -61,7 +30,6 @@
             .log-panel { margin-top: 0; flex-shrink: 0; }
         }
 
-        /* 各種パーツ */
         h1, h2, h3 { font-size: 15px; margin-top: 0; border-bottom: 2px solid var(--primary); padding-bottom: 5px; margin-bottom: 10px; }
         .form-group { margin-bottom: 15px; }
         label { display: block; font-size: 12px; margin-bottom: 5px; font-weight: bold; }
@@ -72,13 +40,9 @@
         button:hover { background: #357abd; }
         
         .btn-secondary { background: #6c757d; }
-        .btn-secondary:hover { background: #5a6268; }
         .btn-preview { background: #27ae60; }
-        .btn-preview:hover { background: #219150; }
         .btn-danger { background: #e74c3c; }
-        .btn-danger:hover { background: #c0392b; }
 
-        /* メイン上部 (プレビューと検索) */
         .preview-area { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
         .preview-area input[type="text"] { flex-grow: 1; min-width: 150px; font-size: 20px; padding: 10px; border: 1px solid var(--border); border-radius: 4px; }
         .preview-area button { width: auto; flex-shrink: 0; margin: 0; padding: 10px 15px; }
@@ -86,9 +50,9 @@
         .search-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: #f8f9fa; padding: 10px; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 15px; }
         .search-bar input { flex-grow: 1; padding: 8px; font-size: 14px; min-width: 150px; }
         
-        /* グリフ一覧 */
         .glyph-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
         .glyph-card { border: 1px solid var(--border); padding: 8px; border-radius: 6px; background: #fafafa; position: relative; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .glyph-card.multi-char { border-color: #f39c12; background: #fffdf5; } /* 複数文字は少し色を変えて分かりやすく */
         .glyph-card img { max-width: 100%; height: 40px; object-fit: contain; display: block; margin: 0 auto 8px; background: #ccc; background-image: linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%, #eee), linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%, #eee); background-size: 16px 16px; background-position: 0 0, 8px 8px; }
         
         .glyph-header { display: flex; gap: 4px; margin-bottom: 8px; align-items: center; }
@@ -102,7 +66,6 @@
         
         .remove-btn { position: absolute; top: 4px; right: 4px; background: #e74c3c; width: 22px; height: 22px; padding: 0; line-height: 20px; text-align: center; border-radius: 50%; font-size: 12px; color: white; cursor: pointer; border: none; }
         
-        /* ログ用文字色 */
         .log-panel h3 { color: #fff; font-size: 13px; margin: 0 0 5px 0; border-bottom: 1px solid #555; padding-bottom: 3px; }
         .log-list { list-style: none; padding: 0; margin: 0; }
         .log-list li { margin-bottom: 4px; border-bottom: 1px dashed #444; padding-bottom: 3px; line-height: 1.4; word-break: break-all; }
@@ -169,7 +132,7 @@
         </div>
         <div class="search-bar">
             <span style="font-weight: bold; font-size: 14px;">読込済み: <span id="glyphCount">0</span>件</span>
-            <input type="text" id="searchInput" placeholder="検索... (例: あ, U+3042)">
+            <input type="text" id="searchInput" placeholder="検索... (例: あ, U+3042, 複数文字)">
         </div>
     </div>
 
@@ -212,15 +175,17 @@ const getBase64FromUrl = async (url) => {
 
 const processImageFile = async (charNameInput, blob, originalFilename) => {
     let charName = charNameInput;
-    const charStr = Array.from(charName)[0] || "";
-    let unicodeVal = charStr.codePointAt(0);
-    const isDuplicate = glyphs.some(g => g.unicode === unicodeVal && g.char === charStr);
+    // 最初の1文字目をUnicode基準にする
+    const firstCharStr = Array.from(charName)[0] || "";
+    let unicodeVal = firstCharStr ? firstCharStr.codePointAt(0) : puaCounter++;
     
-    if (isDuplicate || !charStr) unicodeVal = puaCounter++;
+    // すでに同じ文字が存在する場合はPUA（外字）領域を割り当てて競合回避
+    const isDuplicate = glyphs.some(g => g.unicode === unicodeVal && g.char === charName);
+    if (isDuplicate || !firstCharStr) unicodeVal = puaCounter++;
 
     let defaultVAlign = "bottom";
-    if (/[！？：；＋\-＝（）／＊〜★♪@!?:;+\-=\(\)\/\*~]/.test(charStr)) defaultVAlign = "center";
-    else if (/[っゃゅょぁぃぅぇぉ、。.,]/.test(charStr)) defaultVAlign = "bottom";
+    if (/[！？：；＋\-＝（）／＊〜★♪@!?:;+\-=\(\)\/\*~]/.test(firstCharStr)) defaultVAlign = "center";
+    else if (/[っゃゅょぁぃぅぇぉ、。.,]/.test(firstCharStr)) defaultVAlign = "bottom";
 
     const url = URL.createObjectURL(blob);
     const img = new Image();
@@ -229,12 +194,19 @@ const processImageFile = async (charNameInput, blob, originalFilename) => {
 
     glyphs.push({
         id: Date.now() + Math.random().toString(16),
-        char: charStr, unicode: unicodeVal, originalUrl: url,
+        char: charName, // 複数文字の名前をそのまま保存
+        unicode: unicodeVal, originalUrl: url,
         width: img.width, height: img.height,
         scale: 100, leftMargin: 0, rightMargin: 0, vOffset: 0,
         vAlign: defaultVAlign, hAlign: "center", xOffset: 0
     });
-    addLog(`画像 "${originalFilename}" を「${charStr}」として取り込みました`);
+    
+    const charLen = Array.from(charName).length;
+    if(charLen >= 2) {
+        addLog(`複数文字 "${originalFilename}" を「${charName}」として取り込みました`, "warn");
+    } else {
+        addLog(`画像 "${originalFilename}" を「${charName}」として取り込みました`);
+    }
 };
 
 const renderGlyphs = () => {
@@ -242,22 +214,35 @@ const renderGlyphs = () => {
     grid.innerHTML = "";
     const searchStr = document.getElementById('searchInput').value.toLowerCase();
     
-    const filteredGlyphs = glyphs.filter(g => {
+    let filteredGlyphs = glyphs.filter(g => {
         if (!searchStr) return true;
+        // 「複数文字」と検索されたら、文字数が2文字以上のものだけを返す
+        if (searchStr === "複数文字") return Array.from(g.char).length >= 2;
+        
         const hex = getUnicodeHex(String.fromCodePoint(g.unicode)).toLowerCase();
         return g.char.toLowerCase().includes(searchStr) || hex.includes(searchStr);
+    });
+
+    // 2文字以上のものを一番下にするための並び替え（ソート）
+    filteredGlyphs.sort((a, b) => {
+        const aIsMulti = Array.from(a.char).length >= 2;
+        const bIsMulti = Array.from(b.char).length >= 2;
+        if (aIsMulti && !bIsMulti) return 1;  // aが複数文字なら後ろへ
+        if (!aIsMulti && bIsMulti) return -1; // bが複数文字ならbを後ろへ
+        return 0; // それ以外はそのまま
     });
 
     document.getElementById('glyphCount').innerText = `${filteredGlyphs.length} / ${glyphs.length}`;
 
     filteredGlyphs.forEach(g => {
+        const isMulti = Array.from(g.char).length >= 2;
         const div = document.createElement('div');
-        div.className = 'glyph-card';
+        div.className = `glyph-card ${isMulti ? 'multi-char' : ''}`;
         div.innerHTML = `
             <button class="remove-btn" title="削除" onclick="removeGlyph('${g.id}')">×</button>
             <img src="${g.originalUrl}" alt="${escapeHTML(g.char)}">
             <div class="glyph-header">
-                <input type="text" value="${escapeHTML(g.char)}" onchange="updateGlyphChar('${g.id}', this.value)" maxlength="1">
+                <input type="text" value="${escapeHTML(g.char)}" onchange="updateGlyphChar('${g.id}', this.value)">
                 <span>${getUnicodeHex(String.fromCodePoint(g.unicode))}</span>
             </div>
             <div class="glyph-settings">
@@ -284,7 +269,8 @@ window.updateGlyphChar = (id, newChar) => {
     const g = glyphs.find(g => g.id === id);
     if (g && newChar) {
         addLog(`文字「${g.char}」を「${newChar}」に変更`);
-        g.char = newChar; g.unicode = newChar.codePointAt(0);
+        g.char = newChar; 
+        g.unicode = Array.from(newChar)[0] ? Array.from(newChar)[0].codePointAt(0) : puaCounter++;
         renderGlyphs();
     }
 };
@@ -351,18 +337,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (isScratch) {
                         const originalName = spriteMap[filename] || spriteMap[charName];
                         if (originalName) {
-                            if (Array.from(originalName).length >= 2) {
-                                addLog(`コスチューム "${originalName}" は2文字以上のためスキップ`, "warn");
-                                continue;
-                            }
+                            // 複数文字スキップ処理を削除しました
                             charName = originalName;
                         } else {
                             addLog(`"${filename}" の対応名が見つからないためそのまま読み込みます`, "warn");
-                        }
-                    } else {
-                        if (Array.from(charName).length >= 2) {
-                            addLog(`ファイル "${charName}" は2文字以上のためスキップ`, "warn");
-                            continue;
                         }
                     }
 
@@ -386,13 +364,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!files.length) return;
         for (let file of files) {
             let charName = file.name.replace(/\.[^/.]+$/, "");
-            if (Array.from(charName).length >= 2) continue;
+            // 複数文字スキップ処理を削除しました
             await processImageFile(charName, file, file.name);
         }
         renderGlyphs();
         e.target.value = "";
     });
 
+    // --- 以降、セーブやフォント生成の処理は以前と同じ ---
     document.getElementById('btnSave').addEventListener('click', async () => {
         if (glyphs.length === 0) return alert("保存する文字がありません");
         try {
@@ -484,7 +463,7 @@ document.addEventListener('DOMContentLoaded', () => {
             await new Promise(r => img.onload = r);
             const path = imageToPath(img, g, unitsPerPixel);
             const widthPx = (g.leftMargin || 0) + (img.width * ((g.scale||100)/100)) + (g.rightMargin || 0);
-            opentypeGlyphs.push(new opentype.Glyph({ name: g.char, unicode: g.unicode, advanceWidth: Math.round(widthPx * unitsPerPixel), path: path }));
+            opentypeGlyphs.push(new opentype.Glyph({ name: Array.from(g.char)[0] || '.notdef', unicode: g.unicode, advanceWidth: Math.round(widthPx * unitsPerPixel), path: path }));
         }
         return new opentype.Font({ familyName: fontName, styleName: 'Regular', unitsPerEm: 1000, ascender: gAsc * unitsPerPixel, descender: gDesc * unitsPerPixel, glyphs: opentypeGlyphs });
     };
