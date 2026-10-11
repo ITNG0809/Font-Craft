@@ -113,6 +113,13 @@
         <label>Descender (負の数)</label>
         <input type="number" id="globalDescender" value="-4">
     </div>
+    <div class="form-group">
+        <label>描画モード</label>
+        <select id="drawMode">
+            <option value="dot">ドット（輪郭を一筆書き・穴も自動でくり抜き）</option>
+            <option value="vector">ベクター（1ドットずつ独立して描画）</option>
+        </select>
+    </div>
     <div class="form-group" style="display: flex; align-items: center; gap: 8px;">
         <input type="checkbox" id="globalGap" checked>
         <label for="globalGap" style="margin: 0; font-size: 13px; cursor: pointer;">文字間に1マスの隙間を空ける</label>
@@ -381,7 +388,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 fontName: document.getElementById('fontName').value,
                 globalAscender: document.getElementById('globalAscender').value,
                 globalDescender: document.getElementById('globalDescender').value,
-                globalGap: document.getElementById('globalGap').checked, // 隙間設定を保存
+                globalGap: document.getElementById('globalGap').checked,
+                drawMode: document.getElementById('drawMode').value,
                 glyphs: saveGlyphs
             };
             const blob = new Blob([JSON.stringify(projectData)], { type: "application/json" });
@@ -403,8 +411,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('fontName').value = data.fontName || "MyPixelFont";
                 document.getElementById('globalAscender').value = data.globalAscender || 16;
                 document.getElementById('globalDescender').value = data.globalDescender || -4;
-                // 古いセーブデータ対応（無い場合はtrueにする）
                 document.getElementById('globalGap').checked = data.globalGap !== false; 
+                if (data.drawMode) document.getElementById('drawMode').value = data.drawMode;
                 
                 glyphs = data.glyphs.map(g => {
                     if (g.originalUrl.startsWith('data:')) {
@@ -442,14 +450,113 @@ document.addEventListener('DOMContentLoaded', () => {
         startY += (gProps.vOffset || 0) * unitsPerPixel;
         const startX = ((gProps.leftMargin || 0) + (gProps.xOffset || 0)) * unitsPerPixel;
 
-        for (let y = 0; y < img.height; y++) {
-            for (let x = 0; x < img.width; x++) {
-                if (imgData[(y * img.width + x) * 4 + 3] > 128) {
-                    const px = startX + x * pixelSize, py = startY - y * pixelSize;
-                    path.moveTo(px, py); path.lineTo(px+pixelSize, py); path.lineTo(px+pixelSize, py-pixelSize); path.lineTo(px, py-pixelSize); path.lineTo(px, py);
+        const mode = document.getElementById('drawMode').value;
+
+        if (mode === 'dot') {
+            // ドットモード：輪郭追跡（境界線トレース）アルゴリズム
+            // 複雑な形や穴（OやBなど）を完全に一筆書きのパスに変換する
+            const isSolid = (x, y) => {
+                if (x < 0 || x >= img.width || y < 0 || y >= img.height) return false;
+                return imgData[(y * img.width + x) * 4 + 3] > 128; // 不透明度で判定
+            };
+
+            // 進行方向に対して「正しい境界線」か判定する関数
+            const checkValid = (nx, ny, ndx, ndy) => {
+                if (ndx === 1 && ndy === 0) return isSolid(nx, ny) && !isSolid(nx, ny - 1);       // 右へ進む: 下が実体
+                if (ndx === 0 && ndy === 1) return isSolid(nx - 1, ny) && !isSolid(nx, ny);       // 下へ進む: 左が実体
+                if (ndx === -1 && ndy === 0) return isSolid(nx - 1, ny - 1) && !isSolid(nx - 1, ny); // 左へ進む: 上が実体
+                if (ndx === 0 && ndy === -1) return isSolid(nx, ny - 1) && !isSolid(nx - 1, ny - 1); // 上へ進む: 右が実体
+                return false;
+            };
+
+            const visitedEdges = new Set(); // 訪問済みの線分を記録
+            
+            for (let y = 0; y < img.height; y++) {
+                for (let x = 0; x < img.width; x++) {
+                    // まだトレースしていない「上向きの境界線」を見つけたらスタート
+                    if (isSolid(x, y) && !isSolid(x, y - 1)) {
+                        const startKey = `${x},${y},1,0`; // x, y, dx, dy
+                        if (!visitedEdges.has(startKey)) {
+                            let cx = x, cy = y, cdx = 1, cdy = 0;
+                            let loopPoints = [];
+                            
+                            // 壁伝いに境界をぐるっと1周する
+                            while (true) {
+                                visitedEdges.add(`${cx},${cy},${cdx},${cdy}`);
+                                loopPoints.push({x: cx, y: cy});
+                                
+                                let nx = cx + cdx, ny = cy + cdy;
+                                
+                                // 次に進む方向の候補（右折、直進、左折、Uターンの順で優先し、実体を右手に保つ）
+                                const candidates = [
+                                    {dx: -cdy, dy: cdx},   // 右折
+                                    {dx: cdx, dy: cdy},    // 直進
+                                    {dx: cdy, dy: -cdx},   // 左折
+                                    {dx: -cdx, dy: -cdy}   // Uターン（1ピクセル幅の先端など）
+                                ];
+                                
+                                let foundNext = false;
+                                for (let c of candidates) {
+                                    if (checkValid(nx, ny, c.dx, c.dy)) {
+                                        cx = nx; cy = ny; cdx = c.dx; cdy = c.dy;
+                                        foundNext = true;
+                                        break;
+                                    }
+                                }
+                                
+                                if (!foundNext) break; // 理論上は起きない
+                                
+                                // スタート地点と向きに戻ってきたら1周完了
+                                if (cx === x && cy === y && cdx === 1 && cdy === 0) {
+                                    break;
+                                }
+                            }
+                            
+                            // 最適化：一直線上にある不要な中間ポイントを削除
+                            const optimizedLoop = [];
+                            for (let i = 0; i < loopPoints.length; i++) {
+                                const prev = loopPoints[(i - 1 + loopPoints.length) % loopPoints.length];
+                                const curr = loopPoints[i];
+                                const next = loopPoints[(i + 1) % loopPoints.length];
+                                
+                                // 外積を利用して一直線上か判定
+                                const dx1 = curr.x - prev.x, dy1 = curr.y - prev.y;
+                                const dx2 = next.x - curr.x, dy2 = next.y - curr.y;
+                                if (dx1 * dy2 !== dy1 * dx2) {
+                                    optimizedLoop.push(curr); // 角だけを残す
+                                }
+                            }
+                            
+                            // パスとして書き出し
+                            if (optimizedLoop.length > 0) {
+                                for (let i = 0; i < optimizedLoop.length; i++) {
+                                    const px = startX + optimizedLoop[i].x * pixelSize;
+                                    const py = startY - optimizedLoop[i].y * pixelSize;
+                                    if (i === 0) path.moveTo(px, py);
+                                    else path.lineTo(px, py);
+                                }
+                                path.close(); // パスを閉じる（穴の切り抜きもこれで自動適用される）
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // ベクターモード：従来通り1ドットずつ個別に四角形を描画
+            for (let y = 0; y < img.height; y++) {
+                for (let x = 0; x < img.width; x++) {
+                    if (imgData[(y * img.width + x) * 4 + 3] > 128) {
+                        const px = startX + x * pixelSize, py = startY - y * pixelSize;
+                        path.moveTo(px, py); 
+                        path.lineTo(px+pixelSize, py); 
+                        path.lineTo(px+pixelSize, py-pixelSize); 
+                        path.lineTo(px, py-pixelSize); 
+                        path.lineTo(px, py);
+                    }
                 }
             }
         }
+        
         return path;
     };
 
@@ -457,8 +564,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const fontName = document.getElementById('fontName').value || "MyPixelFont";
         const gAsc = parseInt(document.getElementById('globalAscender').value) || 16;
         const gDesc = parseInt(document.getElementById('globalDescender').value) || -4;
-        const isGapEnabled = document.getElementById('globalGap').checked; // チェック状態を取得
-        const gapPx = isGapEnabled ? 1 : 0; // チェックされていれば1マス（1px）分の隙間を確保
+        const isGapEnabled = document.getElementById('globalGap').checked;
+        const gapPx = isGapEnabled ? 1 : 0;
         
         const unitsPerPixel = Math.round(1000 / (gAsc - gDesc));
         const opentypeGlyphs = [new opentype.Glyph({ name: '.notdef', unicode: 0, advanceWidth: 500, path: new opentype.Path() })];
@@ -468,7 +575,6 @@ document.addEventListener('DOMContentLoaded', () => {
             await new Promise(r => img.onload = r);
             const path = imageToPath(img, g, unitsPerPixel);
             
-            // 文字幅（右の余白 + gapPx を追加）
             const widthPx = (g.leftMargin || 0) + (img.width * ((g.scale||100)/100)) + (g.rightMargin || 0) + gapPx;
             
             opentypeGlyphs.push(new opentype.Glyph({ name: Array.from(g.char)[0] || '.notdef', unicode: g.unicode, advanceWidth: Math.round(widthPx * unitsPerPixel), path: path }));
