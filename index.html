@@ -44,6 +44,7 @@
         .btn-secondary { background: #6c757d; }
         .btn-preview { background: #27ae60; }
         .btn-danger { background: #e74c3c; }
+        .btn-small { padding: 6px 12px; width: auto; margin: 0; font-size: 12px; }
 
         .preview-area { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
         .preview-area input[type="text"] { flex-grow: 1; min-width: 150px; font-size: 20px; padding: 10px; border: 1px solid var(--border); border-radius: 4px; }
@@ -145,6 +146,7 @@
         </div>
         <div class="search-bar">
             <span style="font-weight: bold; font-size: 14px;">読込済み: <span id="glyphCount">0</span>件</span>
+            <button id="btnCopyChars" class="btn-secondary btn-small">収録文字をコピー</button>
             <input type="text" id="searchInput" placeholder="検索... (例: あ, U+3042, 複数文字)">
         </div>
     </div>
@@ -187,12 +189,20 @@ const getBase64FromUrl = async (url) => {
 };
 
 const processImageFile = async (charNameInput, blob, originalFilename) => {
-    let charName = charNameInput;
+    let charName = String(charNameInput || "");
     const firstCharStr = Array.from(charName)[0] || "";
+    
+    // 文字コードの決定 (文字がない場合はPUAを割り当て)
     let unicodeVal = firstCharStr ? firstCharStr.codePointAt(0) : puaCounter++;
     
-    const isDuplicate = glyphs.some(g => g.unicode === unicodeVal && g.char === charName);
-    if (isDuplicate || !firstCharStr) unicodeVal = puaCounter++;
+    // 【修正箇所】どんな文字でも絶対に弾かずに追加するロジック
+    // 既存の文字コードと被る場合は、一時的にPUA(プライベート領域)を割り当てて強制読み込み
+    while (glyphs.some(g => g.unicode === unicodeVal)) {
+        unicodeVal = puaCounter++;
+        if (firstCharStr) {
+            addLog(`「${charName}」は重複等のため一時的に拡張コード(U+${unicodeVal.toString(16)})で読み込みました`, "warn");
+        }
+    }
 
     let defaultVAlign = "bottom";
     if (/[！？：；＋\-＝（）／＊〜★♪@!?:;+\-=\(\)\/\*~]/.test(firstCharStr)) defaultVAlign = "center";
@@ -275,10 +285,15 @@ window.removeGlyph = (id) => {
 
 window.updateGlyphChar = (id, newChar) => {
     const g = glyphs.find(g => g.id === id);
-    if (g && newChar) {
+    if (g && newChar !== undefined) {
         addLog(`文字「${g.char}」を「${newChar}」に変更`);
         g.char = newChar; 
-        g.unicode = Array.from(newChar)[0] ? Array.from(newChar)[0].codePointAt(0) : puaCounter++;
+        
+        let newUnicode = Array.from(newChar)[0] ? Array.from(newChar)[0].codePointAt(0) : puaCounter++;
+        while (glyphs.some(other => other.id !== id && other.unicode === newUnicode)) {
+            newUnicode = puaCounter++;
+        }
+        g.unicode = newUnicode;
         renderGlyphs();
     }
 };
@@ -290,6 +305,24 @@ window.updateGlyphProp = (id, prop, value) => {
         addLog(`文字「${g.char}」の ${prop} を変更しました`);
     }
 };
+
+// 【新規追加】収録文字一覧のコピー機能
+document.getElementById('btnCopyChars').addEventListener('click', () => {
+    if (glyphs.length === 0) return alert("読み込まれている文字がありません。");
+    
+    // 重複を省き、1文字だけ抽出して連結
+    const uniqueChars = Array.from(new Set(glyphs.map(g => g.char).filter(c => Array.from(c).length === 1))).join('');
+    
+    if(navigator.clipboard) {
+        navigator.clipboard.writeText(uniqueChars).then(() => {
+            alert("クリップボードにコピーしました！\n\n【収録文字一覧】\n" + uniqueChars);
+        }).catch(() => {
+            prompt("以下のテキストをコピーしてください:", uniqueChars);
+        });
+    } else {
+        prompt("以下のテキストをコピーしてください:", uniqueChars);
+    }
+});
 
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('searchInput').addEventListener('input', renderGlyphs);
@@ -333,21 +366,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (data.costumes) registerCostumes(data.costumes);
                 else if (data.targets) data.targets.forEach(t => { if (t.costumes) registerCostumes(t.costumes); });
-                
-                addLog("Scratchデータを検知。暗号名の復元準備をしました");
             }
 
             for (const [filename, fileData] of Object.entries(zip.files)) {
                 if (!fileData.dir && filename.match(/\.(png|svg)$/i)) {
-                    let charName = filename.replace(/\.[^/.]+$/, "");
-                    if (charName.includes('/')) charName = charName.split('/').pop();
+                    
+                    // 【修正箇所】拡張子を取り除く処理を堅牢に (.png というファイル名でも . だけ取り出せるように)
+                    let baseName = filename.includes('/') ? filename.split('/').pop() : filename;
+                    let charName = baseName;
+                    const lastDot = baseName.lastIndexOf('.');
+                    if (lastDot > 0) {
+                        charName = baseName.substring(0, lastDot);
+                    } else if (lastDot === 0) {
+                        charName = "."; // 「.png」などの場合
+                    }
                     
                     if (isScratch) {
                         const originalName = spriteMap[filename] || spriteMap[charName];
                         if (originalName) {
                             charName = originalName;
-                        } else {
-                            addLog(`"${filename}" の対応名が見つからないためそのまま読み込みます`, "warn");
                         }
                     }
 
@@ -370,13 +407,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const files = e.target.files;
         if (!files.length) return;
         for (let file of files) {
-            let charName = file.name.replace(/\.[^/.]+$/, "");
+            // 【修正箇所】手動アップロード時も拡張子処理を修正
+            let charName = file.name;
+            const lastDot = charName.lastIndexOf('.');
+            if (lastDot > 0) {
+                charName = charName.substring(0, lastDot);
+            } else if (lastDot === 0) {
+                charName = ".";
+            }
             await processImageFile(charName, file, file.name);
         }
         renderGlyphs();
         e.target.value = "";
     });
 
+    // --- 以下、保存・読込・パス変換などの処理は前回と同じ ---
     document.getElementById('btnSave').addEventListener('click', async () => {
         if (glyphs.length === 0) return alert("保存する文字がありません");
         try {
@@ -453,46 +498,40 @@ document.addEventListener('DOMContentLoaded', () => {
         const mode = document.getElementById('drawMode').value;
 
         if (mode === 'dot') {
-            // ドットモード：輪郭追跡（境界線トレース）アルゴリズム
-            // 複雑な形や穴（OやBなど）を完全に一筆書きのパスに変換する
             const isSolid = (x, y) => {
                 if (x < 0 || x >= img.width || y < 0 || y >= img.height) return false;
-                return imgData[(y * img.width + x) * 4 + 3] > 128; // 不透明度で判定
+                return imgData[(y * img.width + x) * 4 + 3] > 128; 
             };
 
-            // 進行方向に対して「正しい境界線」か判定する関数
             const checkValid = (nx, ny, ndx, ndy) => {
-                if (ndx === 1 && ndy === 0) return isSolid(nx, ny) && !isSolid(nx, ny - 1);       // 右へ進む: 下が実体
-                if (ndx === 0 && ndy === 1) return isSolid(nx - 1, ny) && !isSolid(nx, ny);       // 下へ進む: 左が実体
-                if (ndx === -1 && ndy === 0) return isSolid(nx - 1, ny - 1) && !isSolid(nx - 1, ny); // 左へ進む: 上が実体
-                if (ndx === 0 && ndy === -1) return isSolid(nx, ny - 1) && !isSolid(nx - 1, ny - 1); // 上へ進む: 右が実体
+                if (ndx === 1 && ndy === 0) return isSolid(nx, ny) && !isSolid(nx, ny - 1);       
+                if (ndx === 0 && ndy === 1) return isSolid(nx - 1, ny) && !isSolid(nx, ny);       
+                if (ndx === -1 && ndy === 0) return isSolid(nx - 1, ny - 1) && !isSolid(nx - 1, ny); 
+                if (ndx === 0 && ndy === -1) return isSolid(nx, ny - 1) && !isSolid(nx - 1, ny - 1); 
                 return false;
             };
 
-            const visitedEdges = new Set(); // 訪問済みの線分を記録
+            const visitedEdges = new Set(); 
             
             for (let y = 0; y < img.height; y++) {
                 for (let x = 0; x < img.width; x++) {
-                    // まだトレースしていない「上向きの境界線」を見つけたらスタート
                     if (isSolid(x, y) && !isSolid(x, y - 1)) {
-                        const startKey = `${x},${y},1,0`; // x, y, dx, dy
+                        const startKey = `${x},${y},1,0`; 
                         if (!visitedEdges.has(startKey)) {
                             let cx = x, cy = y, cdx = 1, cdy = 0;
                             let loopPoints = [];
                             
-                            // 壁伝いに境界をぐるっと1周する
                             while (true) {
                                 visitedEdges.add(`${cx},${cy},${cdx},${cdy}`);
                                 loopPoints.push({x: cx, y: cy});
                                 
                                 let nx = cx + cdx, ny = cy + cdy;
                                 
-                                // 次に進む方向の候補（右折、直進、左折、Uターンの順で優先し、実体を右手に保つ）
                                 const candidates = [
-                                    {dx: -cdy, dy: cdx},   // 右折
-                                    {dx: cdx, dy: cdy},    // 直進
-                                    {dx: cdy, dy: -cdx},   // 左折
-                                    {dx: -cdx, dy: -cdy}   // Uターン（1ピクセル幅の先端など）
+                                    {dx: -cdy, dy: cdx},   
+                                    {dx: cdx, dy: cdy},    
+                                    {dx: cdy, dy: -cdx},   
+                                    {dx: -cdx, dy: -cdy}   
                                 ];
                                 
                                 let foundNext = false;
@@ -504,30 +543,21 @@ document.addEventListener('DOMContentLoaded', () => {
                                     }
                                 }
                                 
-                                if (!foundNext) break; // 理論上は起きない
-                                
-                                // スタート地点と向きに戻ってきたら1周完了
-                                if (cx === x && cy === y && cdx === 1 && cdy === 0) {
-                                    break;
-                                }
+                                if (!foundNext) break; 
+                                if (cx === x && cy === y && cdx === 1 && cdy === 0) break;
                             }
                             
-                            // 最適化：一直線上にある不要な中間ポイントを削除
                             const optimizedLoop = [];
                             for (let i = 0; i < loopPoints.length; i++) {
                                 const prev = loopPoints[(i - 1 + loopPoints.length) % loopPoints.length];
                                 const curr = loopPoints[i];
                                 const next = loopPoints[(i + 1) % loopPoints.length];
                                 
-                                // 外積を利用して一直線上か判定
                                 const dx1 = curr.x - prev.x, dy1 = curr.y - prev.y;
                                 const dx2 = next.x - curr.x, dy2 = next.y - curr.y;
-                                if (dx1 * dy2 !== dy1 * dx2) {
-                                    optimizedLoop.push(curr); // 角だけを残す
-                                }
+                                if (dx1 * dy2 !== dy1 * dx2) optimizedLoop.push(curr); 
                             }
                             
-                            // パスとして書き出し
                             if (optimizedLoop.length > 0) {
                                 for (let i = 0; i < optimizedLoop.length; i++) {
                                     const px = startX + optimizedLoop[i].x * pixelSize;
@@ -535,14 +565,13 @@ document.addEventListener('DOMContentLoaded', () => {
                                     if (i === 0) path.moveTo(px, py);
                                     else path.lineTo(px, py);
                                 }
-                                path.close(); // パスを閉じる（穴の切り抜きもこれで自動適用される）
+                                path.close(); 
                             }
                         }
                     }
                 }
             }
         } else {
-            // ベクターモード：従来通り1ドットずつ個別に四角形を描画
             for (let y = 0; y < img.height; y++) {
                 for (let x = 0; x < img.width; x++) {
                     if (imgData[(y * img.width + x) * 4 + 3] > 128) {
