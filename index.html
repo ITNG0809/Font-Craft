@@ -188,16 +188,23 @@ const getBase64FromUrl = async (url) => {
     });
 };
 
+const cleanFilenameToChar = (filename) => {
+    let name = filename.includes('/') ? filename.split('/').pop() : filename;
+    if (name.endsWith('.png')) name = name.slice(0, -4);
+    else if (name.endsWith('.svg')) name = name.slice(0, -4);
+    return name;
+};
+
 const processImageFile = async (charNameInput, blob, originalFilename, scratchInfo = null) => {
-    let charName = String(charNameInput || "");
+    let charName = String(charNameInput !== undefined && charNameInput !== null ? charNameInput : "");
+    if (charName === "") charName = cleanFilenameToChar(originalFilename);
+    if (charName === "") charName = "."; // 完全に空っぽならピリオド扱い
+    
     const firstCharStr = Array.from(charName)[0] || "";
     let unicodeVal = firstCharStr ? firstCharStr.codePointAt(0) : puaCounter++;
     
     while (glyphs.some(g => g.unicode === unicodeVal)) {
         unicodeVal = puaCounter++;
-        if (firstCharStr) {
-            addLog(`「${charName}」は重複等のため一時的に拡張コード(U+${unicodeVal.toString(16)})で読み込みました`, "warn");
-        }
     }
 
     let defaultVAlign = "bottom";
@@ -221,15 +228,15 @@ const processImageFile = async (charNameInput, blob, originalFilename, scratchIn
         width: img.width, height: img.height,
         scale: 100, leftMargin: 0, rightMargin: 0, vOffset: 0,
         vAlign: defaultVAlign, hAlign: "center", xOffset: 0,
-        scratchCx: scratchInfo ? scratchInfo.cx : 0,
-        scratchCy: scratchInfo ? scratchInfo.cy : 0
+        scratchCx: scratchInfo ? scratchInfo.cx : img.width / 2,
+        scratchCy: scratchInfo ? scratchInfo.cy : img.height / 2
     });
     
     const charLen = Array.from(charName).length;
     if(charLen >= 2) {
         addLog(`複数文字 "${originalFilename}" を「${charName}」として取り込みました`, "warn");
     } else {
-        addLog(`画像 "${originalFilename}" を「${charName}」として取り込みました`);
+        addLog(`画像「${charName}」を取り込みました`);
     }
 };
 
@@ -346,8 +353,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         try {
             const zip = await JSZip.loadAsync(file);
-            let spriteMap = {};
-            
             const jsonFile = zip.file("sprite.json") || zip.file("project.json");
             const isScratch = !!jsonFile;
 
@@ -355,41 +360,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 const jsonTxt = await jsonFile.async("text");
                 const data = JSON.parse(jsonTxt);
                 
-                const registerCostumes = (costumes) => {
+                // 【超重要修正】画像ファイルベースではなく、コスチュームリストベースで読み込む
+                let costumesToLoad = [];
+                const extractCostumes = (costumes) => {
                     costumes.forEach(c => {
-                        const info = { name: c.name, cx: c.rotationCenterX, cy: c.rotationCenterY };
-                        if (c.md5ext) spriteMap[c.md5ext] = info;
-                        if (c.assetId) {
-                            spriteMap[c.assetId] = info;
-                            spriteMap[`${c.assetId}.${c.dataFormat}`] = info;
-                        }
+                        costumesToLoad.push({
+                            name: c.name,
+                            filename: c.md5ext || `${c.assetId}.${c.dataFormat}`,
+                            cx: c.rotationCenterX,
+                            cy: c.rotationCenterY
+                        });
                     });
                 };
 
-                if (data.costumes) registerCostumes(data.costumes);
-                else if (data.targets) data.targets.forEach(t => { if (t.costumes) registerCostumes(t.costumes); });
-            }
+                if (data.costumes) extractCostumes(data.costumes);
+                if (data.targets) data.targets.forEach(t => { if (t.costumes) extractCostumes(t.costumes); });
 
-            for (const [filename, fileData] of Object.entries(zip.files)) {
-                if (!fileData.dir && filename.match(/\.(png|svg)$/i)) {
-                    
-                    let baseName = filename.includes('/') ? filename.split('/').pop() : filename;
-                    let charName = baseName;
-                    const lastDot = baseName.lastIndexOf('.');
-                    if (lastDot > 0) charName = baseName.substring(0, lastDot);
-                    else if (lastDot === 0) charName = ".";
-                    
-                    let scratchInfo = null;
-                    if (isScratch) {
-                        const info = spriteMap[filename] || spriteMap[charName];
-                        if (info) {
-                            charName = info.name;
-                            scratchInfo = info; 
-                        }
+                // Scratchのリストに沿って、重複していてもすべて読み込む
+                for (const c of costumesToLoad) {
+                    const fileData = zip.file(c.filename);
+                    if (fileData) {
+                        const blob = await fileData.async('blob');
+                        await processImageFile(c.name, blob, c.filename, { cx: c.cx, cy: c.cy });
+                    } else {
+                        addLog(`ファイルが見つかりません: ${c.name}`, "err");
                     }
-
-                    const blob = await fileData.async('blob');
-                    await processImageFile(charName, blob, filename, scratchInfo);
+                }
+            } else {
+                // 普通のZIPファイルの場合
+                for (const [filename, fileData] of Object.entries(zip.files)) {
+                    if (!fileData.dir && filename.match(/\.(png|svg)$/i)) {
+                        let charName = cleanFilenameToChar(filename);
+                        const blob = await fileData.async('blob');
+                        await processImageFile(charName, blob, filename, null);
+                    }
                 }
             }
             renderGlyphs();
@@ -407,10 +411,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const files = e.target.files;
         if (!files.length) return;
         for (let file of files) {
-            let charName = file.name;
-            const lastDot = charName.lastIndexOf('.');
-            if (lastDot > 0) charName = charName.substring(0, lastDot);
-            else if (lastDot === 0) charName = ".";
+            let charName = cleanFilenameToChar(file.name);
             await processImageFile(charName, file, file.name);
         }
         renderGlyphs();
@@ -493,7 +494,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const cx = gProps.scratchCx !== undefined ? gProps.scratchCx : img.width / 2;
             const cy = gProps.scratchCy !== undefined ? gProps.scratchCy : img.height / 2;
             
-            // 【修正箇所】横方向のズレ計算。cxを基準にして文字の描画開始位置をズラす
             const halfWidth = Math.max(cx, img.width - cx);
             const offsetX = halfWidth - cx; 
             startX += offsetX * pixelSize;
@@ -510,12 +510,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const mode = document.getElementById('drawMode').value;
 
-        if (mode === 'dot') {
-            const isSolid = (x, y) => {
-                if (x < 0 || x >= img.width || y < 0 || y >= img.height) return false;
-                return imgData[(y * img.width + x) * 4 + 3] > 128; 
-            };
+        // 【超重要修正】透明度判定を限界まで下げて、1ピクセルの点も絶対に拾う
+        const isSolid = (x, y) => {
+            if (x < 0 || x >= img.width || y < 0 || y >= img.height) return false;
+            return imgData[(y * img.width + x) * 4 + 3] > 0; 
+        };
 
+        if (mode === 'dot') {
             const checkValid = (nx, ny, ndx, ndy) => {
                 if (ndx === 1 && ndy === 0) return isSolid(nx, ny) && !isSolid(nx, ny - 1);       
                 if (ndx === 0 && ndy === 1) return isSolid(nx - 1, ny) && !isSolid(nx, ny);       
@@ -525,6 +526,7 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             const visitedEdges = new Set(); 
+            let pathGenerated = false;
             
             for (let y = 0; y < img.height; y++) {
                 for (let x = 0; x < img.width; x++) {
@@ -579,7 +581,23 @@ document.addEventListener('DOMContentLoaded', () => {
                                     else path.lineTo(px, py);
                                 }
                                 path.close(); 
+                                pathGenerated = true;
                             }
+                        }
+                    }
+                }
+            }
+
+            if (!pathGenerated) {
+                for (let y = 0; y < img.height; y++) {
+                    for (let x = 0; x < img.width; x++) {
+                        if (isSolid(x, y)) {
+                            const px = startX + x * pixelSize, py = startY - y * pixelSize;
+                            path.moveTo(px, py); 
+                            path.lineTo(px+pixelSize, py); 
+                            path.lineTo(px+pixelSize, py-pixelSize); 
+                            path.lineTo(px, py-pixelSize); 
+                            path.lineTo(px, py);
                         }
                     }
                 }
@@ -587,7 +605,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             for (let y = 0; y < img.height; y++) {
                 for (let x = 0; x < img.width; x++) {
-                    if (imgData[(y * img.width + x) * 4 + 3] > 128) {
+                    if (isSolid(x, y)) {
                         const px = startX + x * pixelSize, py = startY - y * pixelSize;
                         path.moveTo(px, py); 
                         path.lineTo(px+pixelSize, py); 
@@ -618,11 +636,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const path = imageToPath(img, g, unitsPerPixel);
             const scale = (g.scale || 100) / 100;
             
-            // 【修正箇所】横方向のズレを考慮して、全体の文字幅（ベース幅）を計算する
             let baseWidth = img.width;
             if (g.vAlign === 'scratch') {
                 const cx = g.scratchCx !== undefined ? g.scratchCx : img.width / 2;
-                // cx（中心）から見て、左端と右端の遠い方を基準に全体の幅を決定する
                 const halfWidth = Math.max(cx, img.width - cx);
                 baseWidth = halfWidth * 2;
             }
