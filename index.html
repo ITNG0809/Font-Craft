@@ -188,15 +188,11 @@ const getBase64FromUrl = async (url) => {
     });
 };
 
-const processImageFile = async (charNameInput, blob, originalFilename) => {
+const processImageFile = async (charNameInput, blob, originalFilename, scratchInfo = null) => {
     let charName = String(charNameInput || "");
     const firstCharStr = Array.from(charName)[0] || "";
-    
-    // 文字コードの決定 (文字がない場合はPUAを割り当て)
     let unicodeVal = firstCharStr ? firstCharStr.codePointAt(0) : puaCounter++;
     
-    // 【修正箇所】どんな文字でも絶対に弾かずに追加するロジック
-    // 既存の文字コードと被る場合は、一時的にPUA(プライベート領域)を割り当てて強制読み込み
     while (glyphs.some(g => g.unicode === unicodeVal)) {
         unicodeVal = puaCounter++;
         if (firstCharStr) {
@@ -205,8 +201,13 @@ const processImageFile = async (charNameInput, blob, originalFilename) => {
     }
 
     let defaultVAlign = "bottom";
-    if (/[！？：；＋\-＝（）／＊〜★♪@!?:;+\-=\(\)\/\*~]/.test(firstCharStr)) defaultVAlign = "center";
-    else if (/[っゃゅょぁぃぅぇぉ、。.,]/.test(firstCharStr)) defaultVAlign = "bottom";
+    if (scratchInfo && scratchInfo.cx !== undefined && scratchInfo.cy !== undefined) {
+        defaultVAlign = "scratch";
+    } else if (/[！？：；＋\-＝（）／＊〜★♪@!?:;+\-=\(\)\/\*~]/.test(firstCharStr)) {
+        defaultVAlign = "center";
+    } else if (/[っゃゅょぁぃぅぇぉ、。.,]/.test(firstCharStr)) {
+        defaultVAlign = "bottom";
+    }
 
     const url = URL.createObjectURL(blob);
     const img = new Image();
@@ -219,7 +220,9 @@ const processImageFile = async (charNameInput, blob, originalFilename) => {
         unicode: unicodeVal, originalUrl: url,
         width: img.width, height: img.height,
         scale: 100, leftMargin: 0, rightMargin: 0, vOffset: 0,
-        vAlign: defaultVAlign, hAlign: "center", xOffset: 0
+        vAlign: defaultVAlign, hAlign: "center", xOffset: 0,
+        scratchCx: scratchInfo ? scratchInfo.cx : 0,
+        scratchCy: scratchInfo ? scratchInfo.cy : 0
     });
     
     const charLen = Array.from(charName).length;
@@ -256,6 +259,7 @@ const renderGlyphs = () => {
         const isMulti = Array.from(g.char).length >= 2;
         const div = document.createElement('div');
         div.className = `glyph-card ${isMulti ? 'multi-char' : ''}`;
+        
         div.innerHTML = `
             <button class="remove-btn" title="削除" onclick="removeGlyph('${g.id}')">×</button>
             <img src="${g.originalUrl}" alt="${escapeHTML(g.char)}">
@@ -265,7 +269,12 @@ const renderGlyphs = () => {
             </div>
             <div class="glyph-settings">
                 <div><label>ｽｹｰﾙ(%)</label><input type="number" value="${g.scale}" onchange="updateGlyphProp('${g.id}', 'scale', this.value)"></div>
-                <div><label>垂直</label><select onchange="updateGlyphProp('${g.id}', 'vAlign', this.value)"><option value="top" ${g.vAlign==='top'?'selected':''}>上</option><option value="center" ${g.vAlign==='center'?'selected':''}>中</option><option value="bottom" ${g.vAlign==='bottom'?'selected':''}>下</option></select></div>
+                <div><label>垂直</label><select onchange="updateGlyphProp('${g.id}', 'vAlign', this.value)">
+                    <option value="scratch" ${g.vAlign==='scratch'?'selected':''}>Scratch基準</option>
+                    <option value="top" ${g.vAlign==='top'?'selected':''}>上</option>
+                    <option value="center" ${g.vAlign==='center'?'selected':''}>中</option>
+                    <option value="bottom" ${g.vAlign==='bottom'?'selected':''}>下</option>
+                </select></div>
                 <div><label>左余白</label><input type="number" value="${g.leftMargin}" onchange="updateGlyphProp('${g.id}', 'leftMargin', this.value)"></div>
                 <div><label>右余白</label><input type="number" value="${g.rightMargin}" onchange="updateGlyphProp('${g.id}', 'rightMargin', this.value)"></div>
                 <div><label>Xズレ</label><input type="number" value="${g.xOffset}" onchange="updateGlyphProp('${g.id}', 'xOffset', this.value)"></div>
@@ -306,22 +315,14 @@ window.updateGlyphProp = (id, prop, value) => {
     }
 };
 
-// 【新規追加】収録文字一覧のコピー機能
 document.getElementById('btnCopyChars').addEventListener('click', () => {
     if (glyphs.length === 0) return alert("読み込まれている文字がありません。");
-    
-    // 重複を省き、1文字だけ抽出して連結
     const uniqueChars = Array.from(new Set(glyphs.map(g => g.char).filter(c => Array.from(c).length === 1))).join('');
-    
     if(navigator.clipboard) {
         navigator.clipboard.writeText(uniqueChars).then(() => {
             alert("クリップボードにコピーしました！\n\n【収録文字一覧】\n" + uniqueChars);
-        }).catch(() => {
-            prompt("以下のテキストをコピーしてください:", uniqueChars);
-        });
-    } else {
-        prompt("以下のテキストをコピーしてください:", uniqueChars);
-    }
+        }).catch(() => { prompt("以下のテキストをコピーしてください:", uniqueChars); });
+    } else { prompt("以下のテキストをコピーしてください:", uniqueChars); }
 });
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -356,10 +357,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const registerCostumes = (costumes) => {
                     costumes.forEach(c => {
-                        if (c.md5ext) spriteMap[c.md5ext] = c.name;
+                        const info = { name: c.name, cx: c.rotationCenterX, cy: c.rotationCenterY };
+                        if (c.md5ext) spriteMap[c.md5ext] = info;
                         if (c.assetId) {
-                            spriteMap[c.assetId] = c.name;
-                            spriteMap[`${c.assetId}.${c.dataFormat}`] = c.name;
+                            spriteMap[c.assetId] = info;
+                            spriteMap[`${c.assetId}.${c.dataFormat}`] = info;
                         }
                     });
                 };
@@ -371,25 +373,23 @@ document.addEventListener('DOMContentLoaded', () => {
             for (const [filename, fileData] of Object.entries(zip.files)) {
                 if (!fileData.dir && filename.match(/\.(png|svg)$/i)) {
                     
-                    // 【修正箇所】拡張子を取り除く処理を堅牢に (.png というファイル名でも . だけ取り出せるように)
                     let baseName = filename.includes('/') ? filename.split('/').pop() : filename;
                     let charName = baseName;
                     const lastDot = baseName.lastIndexOf('.');
-                    if (lastDot > 0) {
-                        charName = baseName.substring(0, lastDot);
-                    } else if (lastDot === 0) {
-                        charName = "."; // 「.png」などの場合
-                    }
+                    if (lastDot > 0) charName = baseName.substring(0, lastDot);
+                    else if (lastDot === 0) charName = ".";
                     
+                    let scratchInfo = null;
                     if (isScratch) {
-                        const originalName = spriteMap[filename] || spriteMap[charName];
-                        if (originalName) {
-                            charName = originalName;
+                        const info = spriteMap[filename] || spriteMap[charName];
+                        if (info) {
+                            charName = info.name;
+                            scratchInfo = info; 
                         }
                     }
 
                     const blob = await fileData.async('blob');
-                    await processImageFile(charName, blob, filename);
+                    await processImageFile(charName, blob, filename, scratchInfo);
                 }
             }
             renderGlyphs();
@@ -407,21 +407,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const files = e.target.files;
         if (!files.length) return;
         for (let file of files) {
-            // 【修正箇所】手動アップロード時も拡張子処理を修正
             let charName = file.name;
             const lastDot = charName.lastIndexOf('.');
-            if (lastDot > 0) {
-                charName = charName.substring(0, lastDot);
-            } else if (lastDot === 0) {
-                charName = ".";
-            }
+            if (lastDot > 0) charName = charName.substring(0, lastDot);
+            else if (lastDot === 0) charName = ".";
             await processImageFile(charName, file, file.name);
         }
         renderGlyphs();
         e.target.value = "";
     });
 
-    // --- 以下、保存・読込・パス変換などの処理は前回と同じ ---
     document.getElementById('btnSave').addEventListener('click', async () => {
         if (glyphs.length === 0) return alert("保存する文字がありません");
         try {
@@ -491,9 +486,27 @@ document.addEventListener('DOMContentLoaded', () => {
         const globalAsc = parseInt(document.getElementById('globalAscender').value) * unitsPerPixel;
         const globalDesc = parseInt(document.getElementById('globalDescender').value) * unitsPerPixel;
         
-        let startY = gProps.vAlign === 'top' ? globalAsc : (gProps.vAlign === 'center' ? (globalAsc + globalDesc)/2 + drawnHeight/2 : drawnHeight);
-        startY += (gProps.vOffset || 0) * unitsPerPixel;
-        const startX = ((gProps.leftMargin || 0) + (gProps.xOffset || 0)) * unitsPerPixel;
+        let startY;
+        let startX = ((gProps.leftMargin || 0) + (gProps.xOffset || 0)) * unitsPerPixel;
+
+        if (gProps.vAlign === 'scratch') {
+            const cx = gProps.scratchCx !== undefined ? gProps.scratchCx : img.width / 2;
+            const cy = gProps.scratchCy !== undefined ? gProps.scratchCy : img.height / 2;
+            
+            // 【修正箇所】横方向のズレ計算。cxを基準にして文字の描画開始位置をズラす
+            const halfWidth = Math.max(cx, img.width - cx);
+            const offsetX = halfWidth - cx; 
+            startX += offsetX * pixelSize;
+
+            const diffY = (img.height / 2) - cy;
+            const centerY = (globalAsc + globalDesc) / 2;
+            startY = centerY + (drawnHeight / 2); 
+            startY -= diffY * pixelSize;
+            startY += (gProps.vOffset || 0) * unitsPerPixel;
+        } else {
+            startY = gProps.vAlign === 'top' ? globalAsc : (gProps.vAlign === 'center' ? (globalAsc + globalDesc)/2 + drawnHeight/2 : drawnHeight);
+            startY += (gProps.vOffset || 0) * unitsPerPixel;
+        }
 
         const mode = document.getElementById('drawMode').value;
 
@@ -603,8 +616,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const img = new Image(); img.src = g.originalUrl;
             await new Promise(r => img.onload = r);
             const path = imageToPath(img, g, unitsPerPixel);
+            const scale = (g.scale || 100) / 100;
             
-            const widthPx = (g.leftMargin || 0) + (img.width * ((g.scale||100)/100)) + (g.rightMargin || 0) + gapPx;
+            // 【修正箇所】横方向のズレを考慮して、全体の文字幅（ベース幅）を計算する
+            let baseWidth = img.width;
+            if (g.vAlign === 'scratch') {
+                const cx = g.scratchCx !== undefined ? g.scratchCx : img.width / 2;
+                // cx（中心）から見て、左端と右端の遠い方を基準に全体の幅を決定する
+                const halfWidth = Math.max(cx, img.width - cx);
+                baseWidth = halfWidth * 2;
+            }
+
+            const widthPx = (g.leftMargin || 0) + (baseWidth * scale) + (g.rightMargin || 0) + gapPx;
             
             opentypeGlyphs.push(new opentype.Glyph({ name: Array.from(g.char)[0] || '.notdef', unicode: g.unicode, advanceWidth: Math.round(widthPx * unitsPerPixel), path: path }));
         }
